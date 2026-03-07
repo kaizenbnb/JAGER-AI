@@ -1,0 +1,747 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Binance AI Command Ship - Jager OS</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700&family=Rajdhani:wght@500;600;700&display=swap');
+
+        body,
+        html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            background: #000;
+            overflow: hidden;
+            font-family: 'Rajdhani', sans-serif;
+            color: #fff;
+        }
+
+        #webgl-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+        }
+
+        #ui-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 10;
+        }
+
+        .hud-corner {
+            position: absolute;
+            width: 40px;
+            height: 40px;
+            border: 2px solid rgba(243, 186, 47, 0.3);
+        }
+
+        .hud-tl {
+            top: 30px;
+            left: 30px;
+            border-right: none;
+            border-bottom: none;
+        }
+
+        .hud-tr {
+            top: 30px;
+            right: 30px;
+            border-left: none;
+            border-bottom: none;
+        }
+
+        .hud-bl {
+            bottom: 30px;
+            left: 30px;
+            border-right: none;
+            border-top: none;
+        }
+
+        .hud-br {
+            bottom: 30px;
+            right: 30px;
+            border-left: none;
+            border-top: none;
+        }
+
+        .hud-status {
+            position: absolute;
+            top: 35px;
+            left: 80px;
+            font-family: 'Orbitron', monospace;
+            font-size: 11px;
+            color: #f3ba2f;
+            letter-spacing: 2px;
+            text-shadow: 0 0 10px rgba(243, 186, 47, 0.8);
+        }
+
+        .tg-panel {
+            position: absolute;
+            bottom: 40px;
+            left: 40px;
+            width: 320px;
+            background: rgba(14, 22, 33, 0.7);
+            backdrop-filter: blur(10px);
+            border-radius: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.8);
+            transform: translateY(150%);
+            transition: transform 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        .tg-panel.show {
+            transform: translateY(0);
+        }
+
+        .tg-header {
+            background: rgba(23, 33, 43, 0.8);
+            padding: 10px 15px;
+            border-bottom: 1px solid rgba(0, 0, 0, 0.3);
+            display: flex;
+            align-items: center;
+            border-radius: 12px 12px 0 0;
+        }
+
+        .tg-avatar {
+            width: 35px;
+            height: 35px;
+            background: #f3ba2f;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            color: #000;
+            margin-right: 12px;
+        }
+
+        .tg-title {
+            font-size: 14px;
+            font-weight: 700;
+            color: #fff;
+        }
+
+        .tg-subtitle {
+            font-size: 11px;
+            color: #2AABEE;
+            margin-top: 2px;
+            font-weight: 600;
+        }
+
+        .tg-body {
+            padding: 15px;
+            min-height: 50px;
+        }
+
+        .chat-bubble {
+            background: #2b5278;
+            color: #fff;
+            padding: 12px 15px;
+            border-radius: 12px 12px 12px 2px;
+            font-size: 15px;
+            line-height: 1.4;
+            display: inline-block;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+            opacity: 0;
+            transform: scale(0.9);
+            transform-origin: bottom left;
+            transition: all 0.3s ease;
+        }
+
+        .chat-bubble.show {
+            opacity: 1;
+            transform: scale(1);
+        }
+
+        .chat-cmd {
+            color: #64B5F6;
+            font-family: monospace;
+            font-size: 13px;
+        }
+
+        #controls {
+            position: absolute;
+            top: 30px;
+            right: 80px;
+            background: rgba(0, 0, 0, 0.6);
+            border: 1px solid rgba(243, 186, 47, 0.3);
+            padding: 15px 25px;
+            border-radius: 8px;
+            font-size: 13px;
+            color: #ccc;
+            pointer-events: auto;
+            transition: opacity 0.3s;
+        }
+
+        #controls h3 {
+            margin: 0 0 10px 0;
+            color: #f3ba2f;
+            font-family: 'Orbitron', sans-serif;
+            letter-spacing: 1px;
+        }
+
+        .btn-row {
+            margin: 8px 0;
+            display: flex;
+            align-items: center;
+        }
+
+        kbd {
+            background: #222;
+            border: 1px solid #555;
+            border-radius: 4px;
+            padding: 3px 8px;
+            color: #fff;
+            font-family: monospace;
+            margin-right: 10px;
+            box-shadow: 0 2px 0 #000;
+        }
+
+        .node-color {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 8px;
+        }
+    </style>
+
+    <!-- Three.js + PostProcessing Array -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/EffectComposer.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/RenderPass.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/CopyShader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/LuminosityHighPassShader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/ShaderPass.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/UnrealBloomPass.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tween.js/18.6.4/tween.umd.js"></script>
+</head>
+
+<body>
+
+    <div id="webgl-container"></div>
+
+    <div id="ui-layer">
+        <div class="hud-corner hud-tl"></div>
+        <div class="hud-corner hud-tr"></div>
+        <div class="hud-corner hud-bl"></div>
+        <div class="hud-corner hud-br"></div>
+
+        <div class="hud-status" id="hud-status">
+            JAGER AI MAIN.BRIDGE / ONLINE<br>
+            NETWORK GRAPH / STABLE
+        </div>
+
+        <div id="controls">
+            <h3>SIMULATION DECK</h3>
+            <div class="btn-row"><kbd>1</kbd> <span class="node-color"
+                    style="background:#3b82f6;box-shadow:0 0 5px #3b82f6;"></span> Intelligence Node</div>
+            <div class="btn-row"><kbd>2</kbd> <span class="node-color"
+                    style="background:#10b981;box-shadow:0 0 5px #10b981;"></span> Trading Node</div>
+            <div class="btn-row"><kbd>3</kbd> <span class="node-color"
+                    style="background:#8b5cf6;box-shadow:0 0 5px #8b5cf6;"></span> Data Node</div>
+            <div class="btn-row"><kbd>4</kbd> <span class="node-color"
+                    style="background:#ef4444;box-shadow:0 0 5px #ef4444;"></span> Operations Node</div>
+            <div style="margin-top: 15px; font-size: 11px; color:#888;">Press <kbd style="margin:0 5px;">H</kbd> to hide
+                overlay for recording</div>
+        </div>
+
+        <div class="tg-panel" id="tg-panel">
+            <div class="tg-header">
+                <div class="tg-avatar">J</div>
+                <div>
+                    <div class="tg-title">Mission Control</div>
+                    <div class="tg-subtitle">listening via webhook...</div>
+                </div>
+            </div>
+            <div class="tg-body">
+                <div class="chat-bubble" id="chat-bubble">
+                    <span class="chat-cmd" id="chat-cmd"></span> <span id="chat-text"></span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Audio Synthesis -->
+    <script>
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        function playSfx(type) {
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.connect(gain); gain.connect(audioCtx.destination);
+            const now = audioCtx.currentTime;
+            if (type === 'receive') {
+                osc.type = 'sine'; osc.frequency.setValueAtTime(800, now);
+                osc.frequency.exponentialRampToValueAtTime(1200, now + 0.1);
+                gain.gain.setValueAtTime(0.1, now); gain.gain.exponentialRampToValueAtTime(0.01, now + 0.1);
+                osc.start(now); osc.stop(now + 0.1);
+            } else if (type === 'shoot') {
+                osc.type = 'sawtooth'; osc.frequency.setValueAtTime(400, now);
+                osc.frequency.exponentialRampToValueAtTime(100, now + 0.4);
+                gain.gain.setValueAtTime(0.05, now); gain.gain.exponentialRampToValueAtTime(0.01, now + 0.4);
+                osc.start(now); osc.stop(now + 0.4);
+            }
+        }
+    </script>
+
+    <!-- Three.js Scene Setup -->
+    <script>
+        const container = document.getElementById('webgl-container');
+        const scene = new THREE.Scene();
+        // Dark, rich deep space fog
+        scene.fog = new THREE.FogExp2(0x020205, 0.005);
+
+        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+
+        const pixelRatio = window.devicePixelRatio || 1;
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: "high-performance" });
+        renderer.setPixelRatio(pixelRatio);
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.toneMapping = THREE.ReinhardToneMapping;
+        renderer.toneMappingExposure = 1.0;
+        container.appendChild(renderer.domElement);
+
+        // --- Post-Processing (Bloom) ---
+        const renderScene = new THREE.RenderPass(scene, camera);
+
+        // Ensure Bloom pass gets the native pixel resolution
+        // Params: resolution, strength, radius, threshold
+        // By increasing the threshold (0.6), only very bright materials emit bloom
+        const bloomPass = new THREE.UnrealBloomPass(
+            new THREE.Vector2(window.innerWidth * pixelRatio, window.innerHeight * pixelRatio),
+            0.5, 0.4, 0.6
+        );
+
+        const composer = new THREE.EffectComposer(renderer);
+        composer.setSize(window.innerWidth * pixelRatio, window.innerHeight * pixelRatio);
+        composer.addPass(renderScene);
+        composer.addPass(bloomPass);
+
+        // --- Materials ---
+        const platformMat = new THREE.MeshStandardMaterial({
+            color: 0x0a0b0e, roughness: 0.8, metalness: 0.2
+        });
+        const platformRimMat = new THREE.MeshStandardMaterial({
+            color: 0xf3ba2f, emissive: 0xf3ba2f, emissiveIntensity: 1.0, roughness: 0.1, metalness: 0.8
+        });
+
+        // --- Starfield & Nebulas ---
+        const starsGeo = new THREE.BufferGeometry();
+        const starsCount = 4000;
+        const posArray = new Float32Array(starsCount * 3);
+        const colorArray = new Float32Array(starsCount * 3);
+        for (let i = 0; i < starsCount * 3; i += 3) {
+            posArray[i] = (Math.random() - 0.5) * 800;
+            posArray[i + 1] = (Math.random() - 0.5) * 800 - 100;
+            posArray[i + 2] = (Math.random() - 0.5) * 800;
+            const r = Math.random();
+            colorArray[i] = r > 0.8 ? 0.5 : 1;
+            colorArray[i + 1] = r > 0.8 ? 0.7 : (r > 0.6 ? 0.8 : 1);
+            colorArray[i + 2] = r > 0.8 ? 1 : (r > 0.6 ? 0.5 : 1);
+        }
+        starsGeo.setAttribute('position', new THREE.BufferAttribute(posArray, 3));
+        starsGeo.setAttribute('color', new THREE.BufferAttribute(colorArray, 3));
+        const starsMat = new THREE.PointsMaterial({ size: 1.2, vertexColors: true, transparent: true, opacity: 0.6, sizeAttenuation: true });
+        const starMesh = new THREE.Points(starsGeo, starsMat);
+        scene.add(starMesh);
+
+        // --- Cinematic Bridge / Binance Logo ---
+        const platformGroup = new THREE.Group();
+        scene.add(platformGroup);
+
+        const S = 6; // square size
+        const G = 1.5; // gap size
+        const P = S + G;
+
+        const extrudeSettings = { depth: 1.5, bevelEnabled: true, bevelSegments: 3, steps: 1, bevelSize: 0.3, bevelThickness: 0.4 };
+        const materialArray = [platformMat, platformRimMat]; // 0: face, 1: sides
+
+        function addShape(shape, x, y) {
+            const geo = new THREE.ExtrudeGeometry(shape, extrudeSettings);
+            geo.translate(0, 0, -0.75); // Center on Z
+            const mesh = new THREE.Mesh(geo, materialArray);
+            mesh.position.set(x, y, 0);
+            platformGroup.add(mesh);
+            return mesh;
+        }
+
+        const squareShape = new THREE.Shape();
+        squareShape.moveTo(-S / 2, -S / 2);
+        squareShape.lineTo(S / 2, -S / 2);
+        squareShape.lineTo(S / 2, S / 2);
+        squareShape.lineTo(-S / 2, S / 2);
+        squareShape.lineTo(-S / 2, -S / 2);
+
+        const chevronShape = new THREE.Shape();
+        chevronShape.moveTo(P + S / 2, P + S / 2);
+        chevronShape.lineTo(P + S / 2, 0 - S / 2);
+        chevronShape.lineTo(P - S / 2, 0 - S / 2);
+        chevronShape.lineTo(P - S / 2, P - S / 2);
+        chevronShape.lineTo(0 - S / 2, P - S / 2);
+        chevronShape.lineTo(0 - S / 2, P + S / 2);
+        chevronShape.lineTo(P + S / 2, P + S / 2);
+
+        // 1. Center Square
+        addShape(squareShape, 0, 0);
+        // 2. Left Square
+        addShape(squareShape, -P, P);
+        // 3. Right Square
+        addShape(squareShape, P, -P);
+        // 4. Top Chevron
+        addShape(chevronShape, 0, 0);
+        // 5. Bottom Chevron (Rotated 180)
+        const botChevron = addShape(chevronShape, 0, 0);
+        botChevron.rotation.z = Math.PI;
+
+        // Pitch platform to lay flat and rotate 45 deg to match Binance Logo
+        platformGroup.rotation.x = -Math.PI / 2;
+        platformGroup.rotation.z = Math.PI / 4;
+
+        // Add subtle Grid pattern surrounding the platform
+        const gridHelper = new THREE.GridHelper(50, 50, 0xf3ba2f, 0x333333);
+        gridHelper.position.y = 0.8;
+        gridHelper.material.transparent = true;
+        gridHelper.material.opacity = 0.05;
+        scene.add(gridHelper);
+
+        // --- Lighting ---
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
+        scene.add(ambientLight);
+
+        const dirLight = new THREE.DirectionalLight(0xffffff, 1.2);
+        dirLight.position.set(20, 40, 20);
+        scene.add(dirLight);
+
+        const centerLight = new THREE.PointLight(0xf3ba2f, 3, 50);
+        centerLight.position.set(0, 5, 0);
+        scene.add(centerLight);
+
+        // --- Agents (Holographic Pods) ---
+        // --- Helper: Create Text Sprite ---
+        function createTextSprite(message, colorHex) {
+            const canvas = document.createElement('canvas');
+            canvas.width = 1024;
+            canvas.height = 512;
+            const context = canvas.getContext('2d');
+
+            context.fillStyle = 'rgba(0,0,0,0)';
+            context.fillRect(0, 0, canvas.width, canvas.height);
+
+            context.font = 'bold 100px Orbitron';
+            context.fillStyle = '#' + colorHex.toString(16).padStart(6, '0');
+            context.textAlign = 'center';
+            context.textBaseline = 'middle';
+            context.shadowColor = '#' + colorHex.toString(16).padStart(6, '0');
+            context.shadowBlur = 20;
+            context.fillText(message, canvas.width / 2, canvas.height / 2);
+
+            const texture = new THREE.CanvasTexture(canvas);
+
+            const spriteMaterial = new THREE.SpriteMaterial({ map: texture, transparent: true, depthTest: false });
+            const sprite = new THREE.Sprite(spriteMaterial);
+            sprite.scale.set(6, 3, 1);
+            return sprite;
+        }
+
+        const agents = {};
+        const agentAnims = [];
+
+        function createAgentPod(id, label, colorHex, localX, localY) {
+            // Apply layout rotation (Platform is rotated +45 deg on its Z axis before pitching)
+            const angle = Math.PI / 4;
+            const wx = localX * Math.cos(angle) - localY * Math.sin(angle);
+            const wz = -(localX * Math.sin(angle) + localY * Math.cos(angle)); // World Z extends forward
+
+            const podGroup = new THREE.Group();
+            podGroup.position.set(wx, 3.0, wz);
+            scene.add(podGroup);
+
+            // Base Hovering Ring
+            const ringGeo = new THREE.TorusGeometry(1.5, 0.1, 8, 32);
+            const ringMat = new THREE.MeshStandardMaterial({ color: 0x334155, metalness: 0.8, roughness: 0.2 });
+            const ring = new THREE.Mesh(ringGeo, ringMat);
+            ring.rotation.x = Math.PI / 2;
+            podGroup.add(ring);
+
+            // Holographic Network Core
+            const coreGeo = new THREE.OctahedronGeometry(1.0, 0);
+            const coreMat = new THREE.MeshStandardMaterial({ color: colorHex, emissive: colorHex, emissiveIntensity: 1.5, wireframe: true, transparent: true, opacity: 0.9, depthWrite: false });
+            const core = new THREE.Mesh(coreGeo, coreMat);
+            podGroup.add(core);
+
+            // Inner solid data node
+            const sphereGeo = new THREE.SphereGeometry(0.3, 16, 16);
+            const sphereMat = new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xffffff, emissiveIntensity: 0.5 });
+            const sphere = new THREE.Mesh(sphereGeo, sphereMat);
+            podGroup.add(sphere);
+
+            const light = new THREE.PointLight(colorHex, 1.0, 25);
+            light.position.set(0, 2, 0);
+            podGroup.add(light);
+
+            // Text Label
+            const textSprite = createTextSprite(label, colorHex);
+            textSprite.position.set(0, 2.5, 0);
+            podGroup.add(textSprite);
+
+            agentAnims.push({ mesh: core, ring: ring, sprite: textSprite, baseRot: Math.random() * 10, speed: 0.02 });
+
+            agents[id] = {
+                group: podGroup,
+                coreParams: coreMat,
+                lightParams: light,
+                pos: new THREE.Vector3(wx, 3.0, wz),
+                color: colorHex
+            };
+        }
+
+        // Center Jager Core
+        const jagerGroup = new THREE.Group();
+        jagerGroup.position.set(0, 3.5, 0);
+        scene.add(jagerGroup);
+
+        const jRing1 = new THREE.Mesh(new THREE.TorusGeometry(2.5, 0.08, 16, 64), new THREE.MeshStandardMaterial({ color: 0xf3ba2f, emissive: 0xf3ba2f, emissiveIntensity: 0.5 }));
+        const jRing2 = new THREE.Mesh(new THREE.TorusGeometry(2.0, 0.05, 16, 64), new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xffffff, emissiveIntensity: 0.8 }));
+        jRing1.rotation.x = Math.PI / 2; jRing2.rotation.x = Math.PI / 2;
+        jagerGroup.add(jRing1, jRing2);
+
+        const jCoreProto = new THREE.IcosahedronGeometry(1.2, 1);
+        const jCoreMat = new THREE.MeshStandardMaterial({ color: 0xf3ba2f, emissive: 0xf3ba2f, emissiveIntensity: 1.2, wireframe: true });
+        const jCore = new THREE.Mesh(jCoreProto, jCoreMat);
+        jagerGroup.add(jCore);
+
+        const jSprite = createTextSprite("JAGER", 0xf3ba2f);
+        jSprite.position.set(0, 3.5, 0);
+        jSprite.scale.set(8, 4, 1);
+        jagerGroup.add(jSprite);
+
+        // Nodes based on the 2D grid
+        createAgentPod('intl', 'MARKET', 0x3b82f6, P, P);       // Top Chevron
+        createAgentPod('trade', 'HUNTER', 0x10b981, -P, P);     // Left Square
+        createAgentPod('data', 'OPPORTUNITY', 0x8b5cf6, -P, -P);     // Bottom Chevron
+        createAgentPod('ops', 'RISK', 0xef4444, P, -P);       // Right Square
+
+        // --- Data Beams (Curves) ---
+        const beams = {};
+        for (const [id, agent] of Object.entries(agents)) {
+            const startNode = new THREE.Vector3(0, 3.5, 0);
+            const endNode = agent.pos.clone();
+            const midPoint = new THREE.Vector3((startNode.x + endNode.x) / 2, 8, (startNode.z + endNode.z) / 2);
+
+            const curve = new THREE.QuadraticBezierCurve3(startNode, midPoint, endNode);
+            const tubeGeo = new THREE.TubeGeometry(curve, 32, 0.15, 8, false);
+            const beamMat = new THREE.MeshStandardMaterial({ color: agent.color, emissive: agent.color, emissiveIntensity: 0, transparent: true, opacity: 0 });
+
+            const beamMesh = new THREE.Mesh(tubeGeo, beamMat);
+            scene.add(beamMesh);
+            beams[id] = { mesh: beamMesh, mat: beamMat };
+        }
+
+        // --- Camera & Animation Loop ---
+        const clock = new THREE.Clock();
+        const camDist = 50;
+        const camHeight = 35;
+
+        function animate() {
+            requestAnimationFrame(animate);
+            TWEEN.update();
+
+            const time = clock.getElapsedTime();
+
+            // Cinematic slow orbit
+            camera.position.x = Math.sin(time * 0.08) * camDist;
+            camera.position.z = Math.cos(time * 0.08) * camDist;
+            camera.position.y = camHeight + Math.sin(time * 0.15) * 5;
+            camera.lookAt(0, 0, 0);
+
+            // Platform levitation
+            platformGroup.position.y = Math.sin(time * 0.4) * 0.8;
+            gridHelper.position.y = 0.6 + Math.sin(time * 0.4) * 0.8;
+
+            starMesh.rotation.y = time * 0.015;
+
+            // Agent Pod animations
+            jagerGroup.position.y = 3.5 + Math.sin(time * 1.5) * 0.3;
+            jRing1.rotation.z = time * 0.5;
+            jRing2.rotation.z = -time * 0.6;
+            jRing1.position.y = Math.sin(time * 2) * 0.2;
+            jCore.rotation.y = time * 0.5;
+            jSprite.position.y = 3.5 + Math.sin(time * 2) * 0.2;
+
+            agentAnims.forEach((anim, i) => {
+                anim.mesh.rotation.y = time + anim.baseRot;
+                anim.mesh.rotation.z = time * 0.5 + anim.baseRot;
+                anim.ring.rotation.z = time * 0.3 + anim.baseRot;
+                anim.sprite.position.y = 2.5 + Math.sin(time * 2.5 + i) * 0.2;
+                anim.mesh.parent.position.y = 3.0 + Math.sin(time * 2 + i) * 0.4;
+            });
+
+            composer.render();
+        }
+        animate();
+
+        // --- Interaction Logic ---
+        const scenarios = {
+            '1': { node: 'intl', cmd: '/analyze', msg: 'Deep-scanning market sentiment across 45 sources...', color: 0x3b82f6 },
+            '2': { node: 'trade', cmd: '/execute', msg: 'Arbitrage detected. Routing order via Binance API.', color: 0x10b981 },
+            '3': { node: 'data', cmd: '/fetch', msg: 'Aggregating historical volume profiles for BTC.', color: 0x8b5cf6 },
+            '4': { node: 'ops', cmd: '/audit', msg: 'System integrity check. Balancing node load.', color: 0xef4444 }
+        };
+
+        const tgPanel = document.getElementById('tg-panel');
+        const chatBubble = document.getElementById('chat-bubble');
+        const chatCmd = document.getElementById('chat-cmd');
+        const chatText = document.getElementById('chat-text');
+        const controlsEl = document.getElementById('controls');
+
+        let isAnimating = false;
+
+        function triggerAction(key) {
+            const s = scenarios[key];
+            if (!s || isAnimating) return;
+            isAnimating = true;
+
+            const agent = agents[s.node];
+            const beam = beams[s.node];
+
+            chatCmd.innerText = s.cmd;
+            chatText.innerText = ` ${s.msg}`;
+            tgPanel.classList.add('show');
+            chatBubble.classList.remove('show');
+
+            playSfx('receive');
+
+            setTimeout(() => {
+                chatBubble.classList.add('show');
+                // Pulse Jager
+                new TWEEN.Tween(jCoreMat).to({ emissiveIntensity: 3.5 }, 300).yoyo(true).repeat(3).start();
+
+                setTimeout(() => {
+                    playSfx('shoot');
+
+                    // Activate beam
+                    beam.mat.opacity = 0.9;
+                    new TWEEN.Tween(beam.mat).to({ emissiveIntensity: 6 }, 200).yoyo(true).repeat(3)
+                        .onComplete(() => {
+                            new TWEEN.Tween(beam.mat).to({ emissiveIntensity: 0, opacity: 0 }, 500).start();
+
+                            // Pulse Target Agent
+                            new TWEEN.Tween(agent.lightParams).to({ intensity: 4 }, 300).yoyo(true).repeat(9).start();
+                            new TWEEN.Tween(agent.coreParams).to({ emissiveIntensity: 3 }, 300).yoyo(true).repeat(9)
+                                .onComplete(() => {
+                                    setTimeout(() => {
+                                        chatBubble.classList.remove('show');
+                                        setTimeout(() => { tgPanel.classList.remove('show'); isAnimating = false; }, 400);
+                                    }, 1000);
+                                }).start();
+                        }).start();
+                }, 800);
+            }, 400);
+        }
+
+        window.addEventListener('resize', () => {
+            const pr = window.devicePixelRatio || 1;
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            composer.setSize(window.innerWidth * pr, window.innerHeight * pr);
+        });
+
+        document.addEventListener('keydown', (e) => {
+            if (['1', '2', '3', '4'].includes(e.key)) {
+                triggerAction(e.key);
+            }
+            if (e.key.toLowerCase() === 'h') {
+                controlsEl.style.opacity = controlsEl.style.opacity === '0' ? '1' : '0';
+            }
+        });
+
+        // --- WebSocket Connection ---
+        function connectWebSocket() {
+            const ws = new WebSocket('ws://localhost:8765');
+
+            ws.onopen = () => {
+                console.log("Connected to Jager AI Backend");
+                document.getElementById('hud-status').innerHTML = "JAGER AI MAIN.BRIDGE / ONLINE<br>BACKEND LINK / SUCCESS";
+            };
+
+            ws.onmessage = (event) => {
+                try {
+                    const data = JSON.parse(event.data);
+                    console.log("Jager Action:", data);
+
+                    const s = {
+                        node: data.agent,
+                        cmd: data.cmd,
+                        msg: data.msg,
+                        color: agents[data.agent] ? agents[data.agent].color : 0xffffff
+                    };
+
+                    if (isAnimating) return;
+                    isAnimating = true;
+
+                    const agent = agents[s.node];
+                    const beam = beams[s.node];
+                    if (!agent) { isAnimating = false; return; }
+
+                    chatCmd.innerText = s.cmd;
+                    chatText.innerText = ` ${s.msg}`;
+                    tgPanel.classList.add('show');
+                    chatBubble.classList.remove('show');
+
+                    playSfx('receive');
+
+                    setTimeout(() => {
+                        chatBubble.classList.add('show');
+                        new TWEEN.Tween(jCoreMat).to({ emissiveIntensity: 3.5 }, 300).yoyo(true).repeat(3).start();
+
+                        setTimeout(() => {
+                            playSfx('shoot');
+
+                            beam.mat.opacity = 0.9;
+                            new TWEEN.Tween(beam.mat).to({ emissiveIntensity: 6 }, 200).yoyo(true).repeat(3)
+                                .onComplete(() => {
+                                    new TWEEN.Tween(beam.mat).to({ emissiveIntensity: 0, opacity: 0 }, 500).start();
+
+                                    new TWEEN.Tween(agent.lightParams).to({ intensity: 4 }, 300).yoyo(true).repeat(9).start();
+                                    new TWEEN.Tween(agent.coreParams).to({ emissiveIntensity: 3 }, 300).yoyo(true).repeat(9)
+                                        .onComplete(() => {
+                                            setTimeout(() => {
+                                                chatBubble.classList.remove('show');
+                                                setTimeout(() => { tgPanel.classList.remove('show'); isAnimating = false; }, 400);
+                                            }, 1000);
+                                        }).start();
+                                }).start();
+                        }, 800);
+                    }, 400);
+
+                } catch (e) {
+                    console.error("Error parsing WS message:", e);
+                }
+            };
+
+            ws.onclose = () => {
+                console.log("Disconnected from Jager AI Backend");
+                document.getElementById('hud-status').innerHTML = "JAGER AI MAIN.BRIDGE / OFFLINE<br>BACKEND LINK / LOST<br>RECONNECTING...";
+                setTimeout(connectWebSocket, 3000);
+            };
+        }
+
+        connectWebSocket();
+
+    </script>
+</body>
+
+</html>

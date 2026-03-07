@@ -1,16 +1,18 @@
 """
 Jager AI — Main Entry Point
-Telegram bot powered by Claude (via Anthropic API).
+Telegram bot powered by OpenAI API.
 Orchestrates the four intelligence modules as tools.
 
 Run: python main.py
 """
 
 import asyncio
+import json
 import logging
 from pathlib import Path
 
-import anthropic
+import websockets
+from openai import AsyncOpenAI
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
     Application,
@@ -39,8 +41,30 @@ log = logging.getLogger("jager-ai")
 # ── Load System Prompt ─────────────────────────────────────────────────────
 SYSTEM_PROMPT = Path(config.SYSTEM_PROMPT_PATH).read_text(encoding="utf-8")
 
-# ── Anthropic Client ───────────────────────────────────────────────────────
-anthropic_client = anthropic.Anthropic(api_key=config.ANTHROPIC_API_KEY)
+# ── OpenAI Client ──────────────────────────────────────────────────────────
+openai_client = AsyncOpenAI(api_key=config.OPENAI_API_KEY)
+
+# ── WebSocket Broadcaster ──────────────────────────────────────────────────
+connected_clients = set()
+
+async def ws_handler(websocket, path=""):
+    connected_clients.add(websocket)
+    try:
+        async for message in websocket:
+            pass  # We don't expect messages from the frontend yet
+    finally:
+        connected_clients.remove(websocket)
+
+async def broadcast_ws(data: dict):
+    if connected_clients:
+        message = json.dumps(data)
+        # We use asyncio.gather to ignore connection errors inside the background loop
+        await asyncio.gather(*[client.send(message) for client in connected_clients], return_exceptions=True)
+
+async def post_init(application: Application):
+    log.info("Starting WebSocket server on ws://localhost:8765...")
+    await websockets.serve(ws_handler, "localhost", 8765)
+
 
 # ── Conversation History (in-memory, per chat_id) ──────────────────────────
 conversation_history: dict[int, list[dict]] = {}
@@ -79,6 +103,7 @@ async def route_message(text: str) -> str:
                        "verify", "urgent", "scam", "phishing", "check this message",
                        "is this legit", "is this real"]
     if any(kw in text_lower for kw in threat_keywords):
+        await broadcast_ws({"agent": "ops", "cmd": "/threat_scan", "msg": "Analyzing suspicious message for scam patterns..."})
         result = analyze_message(text)
         return format_threat_response(result)
 
@@ -86,6 +111,7 @@ async def route_message(text: str) -> str:
     risk_keywords = ["leverage", "100x", "50x", "20x", "all in", "all-in",
                      "memecoin", "meme coin", "yolo", "bet everything"]
     if any(kw in text_lower for kw in risk_keywords):
+        await broadcast_ws({"agent": "trade", "cmd": "/risk_audit", "msg": "Evaluating leverage parameters and liquidation risk."})
         result = analyze_risk(text)
         return format_risk_response(result)
 
@@ -93,40 +119,44 @@ async def route_message(text: str) -> str:
     market_keywords = ["market", "price", "bnb price", "trend", "narrative",
                        "gainers", "briefing", "intel", "analysis"]
     if any(kw in text_lower for kw in market_keywords):
+        await broadcast_ws({"agent": "intl", "cmd": "/market_intel", "msg": "Gathering macro narrative and price data."})
         return await get_market_intelligence()
 
     # Opportunity keywords
     opportunity_keywords = ["earn", "staking", "launchpool", "yield", "passive",
                              "what can i do", "opportunities", "products", "farming"]
     if any(kw in text_lower for kw in opportunity_keywords):
+        await broadcast_ws({"agent": "data", "cmd": "/fetch_yields", "msg": "Querying Binance ecosystem for yield products."})
         return await get_opportunities(user_goal=text)
 
     # Fall back to Claude for general questions
+    await broadcast_ws({"agent": "intl", "cmd": "/core_inference", "msg": "Routing unstructured query to Jager AI core..."})
     return None  # Signal to use Claude
 
 
-async def ask_claude(chat_id: int, user_message: str) -> str:
-    """Sends a message to Claude with conversation history."""
+async def ask_ai(chat_id: int, user_message: str) -> str:
+    """Sends a message to OpenAI with conversation history."""
     if chat_id not in conversation_history:
-        conversation_history[chat_id] = []
+        conversation_history[chat_id] = [
+            {"role": "system", "content": SYSTEM_PROMPT}
+        ]
 
     conversation_history[chat_id].append({
         "role": "user",
         "content": user_message
     })
 
-    # Trim history
-    if len(conversation_history[chat_id]) > MAX_HISTORY:
-        conversation_history[chat_id] = conversation_history[chat_id][-MAX_HISTORY:]
+    # Trim history (keep system prompt at index 0)
+    if len(conversation_history[chat_id]) > MAX_HISTORY + 1:
+        conversation_history[chat_id] = [conversation_history[chat_id][0]] + conversation_history[chat_id][-MAX_HISTORY:]
 
-    response = anthropic_client.messages.create(
-        model=config.CLAUDE_MODEL,
+    response = await openai_client.chat.completions.create(
+        model=config.OPENAI_MODEL,
         max_tokens=config.MAX_TOKENS,
-        system=SYSTEM_PROMPT,
         messages=conversation_history[chat_id],
     )
 
-    assistant_reply = response.content[0].text
+    assistant_reply = response.choices[0].message.content
 
     conversation_history[chat_id].append({
         "role": "assistant",
@@ -175,18 +205,21 @@ async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def cmd_price(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.chat.send_action("typing")
+    await broadcast_ws({"agent": "intl", "cmd": "/market_intel", "msg": "Fetching real-time BNB ticker."})
     msg = await get_quick_price()
     await update.message.reply_text(msg, parse_mode="Markdown")
 
 
 async def cmd_market(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.chat.send_action("typing")
+    await broadcast_ws({"agent": "intl", "cmd": "/market_intel", "msg": "Gathering macro narrative and price data."})
     msg = await get_market_intelligence()
     await update.message.reply_text(msg, parse_mode="Markdown")
 
 
 async def cmd_opportunities(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.chat.send_action("typing")
+    await broadcast_ws({"agent": "data", "cmd": "/fetch_yields", "msg": "Querying Binance ecosystem for yield products."})
     msg = await get_opportunities()
     await update.message.reply_text(msg, parse_mode="Markdown")
 
@@ -220,9 +253,9 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Try local routing first
     response = await route_message(text)
 
-    # Fall back to Claude
+    # Fall back to AI
     if response is None:
-        response = await ask_claude(chat_id, text)
+        response = await ask_ai(chat_id, text)
 
     await update.message.reply_text(
         response,
@@ -240,6 +273,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     data = query.data
 
     if data == "menu_threat":
+        await broadcast_ws({"agent": "ops", "cmd": "/threat_scan", "msg": "Analyzing suspicious message for scam patterns..."})
         msg = (
             "🔴 **Threat Hunter**\n\n"
             "Paste any suspicious message below and I'll analyze it for scam patterns.\n\n"
@@ -248,11 +282,14 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
     elif data == "menu_opportunity":
         await query.message.chat.send_action("typing")
+        await broadcast_ws({"agent": "data", "cmd": "/fetch_yields", "msg": "Querying Binance ecosystem for yield products."})
         msg = await get_opportunities()
     elif data == "menu_market":
         await query.message.chat.send_action("typing")
+        await broadcast_ws({"agent": "intl", "cmd": "/market_intel", "msg": "Gathering macro narrative and price data."})
         msg = await get_market_intelligence()
     elif data == "menu_risk":
+        await broadcast_ws({"agent": "trade", "cmd": "/risk_audit", "msg": "Evaluating leverage parameters and liquidation risk."})
         msg = (
             "⚠️ **Risk Hunter**\n\n"
             "Describe your intended trade and I'll flag any risk patterns.\n\n"
@@ -260,6 +297,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
     elif data == "menu_price":
         await query.message.chat.send_action("typing")
+        await broadcast_ws({"agent": "intl", "cmd": "/market_intel", "msg": "Fetching real-time BNB ticker."})
         msg = await get_quick_price()
     elif data == "menu_help":
         msg = (
@@ -287,7 +325,7 @@ def main():
     config.validate()
     log.info("🐺 Jager AI starting up...")
 
-    app = Application.builder().token(config.TELEGRAM_BOT_TOKEN).build()
+    app = Application.builder().token(config.TELEGRAM_BOT_TOKEN).post_init(post_init).build()
 
     app.add_handler(CommandHandler("start", cmd_start))
     app.add_handler(CommandHandler("help", cmd_help))
