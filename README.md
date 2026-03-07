@@ -11,7 +11,7 @@
 
 ## The Name
 
-**Jäger** was one of the earliest Binance Angels — a community figure whose name became synonymous with the idea of a very small, fundamental unit of BNB, similar to how *Satoshi* is the smallest unit of Bitcoin.
+**Jager** was one of the earliest Binance Angels — a community figure whose name became synonymous with the idea of a very small, fundamental unit of BNB, similar to how *Satoshi* is the smallest unit of Bitcoin.
 
 One Jäger = `0.00000001 BNB`.
 
