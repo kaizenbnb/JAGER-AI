@@ -4,10 +4,12 @@
 
 [![Python](https://img.shields.io/badge/Python-3.11+-blue.svg)](https://python.org)
 [![Telegram](https://img.shields.io/badge/Interface-Telegram%20Bot-blue)](https://telegram.org)
+[![Web3](https://img.shields.io/badge/Framework-OpenClaw%20Compatible-black)](https://github.com/openclaw)
 [![Binance](https://img.shields.io/badge/Ecosystem-Binance-F0B90B)](https://binance.com)
-[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
 ---
+
+**An OpenClaw-compatible AI intelligence assistant for the Binance ecosystem, demonstrated through a Telegram interface and a visual command-center prototype.**
 
 ## The Name
 
@@ -23,9 +25,7 @@ This project embraces that metaphor: just as many small Jägers form the value o
 
 ## What It Does
 
-Jager AI is a Telegram-based AI agent that helps users interact more intelligently and safely with the Binance ecosystem.
-
-It acts as a crypto reconnaissance agent — continuously scanning the environment and surfacing relevant information.
+Jager AI is designed to help users interact more intelligently and safely with the Binance ecosystem. By adhering to agentic design patterns, it serves as a robust reconnaissance node.
 
 ### Four Core Intelligence Modules
 
@@ -77,13 +77,22 @@ Jager AI:
 
 ---
 
+## Visual Command Center
+
+As part of the intelligence suite, Jager AI includes a **Cinematic 3D Mission Control** interface (`demo_interface_3d.html`). 
+
+This command center connects directly to the Python backend via WebSockets, allowing you to watch the Jager AI agents (Threat, Market, Risk, Opportunity) coordinate in real-time on a holographic Binance-themed command ship while interacting via Telegram.
+
+---
+
 ## Architecture
 
 ```
 User Message (Telegram)
         │
         ▼
-  Intent Router
+   OpenClaw Compatible
+      Intent Router
         │
    ┌────┴─────────────────────────────┐
    │                                  │
@@ -96,7 +105,7 @@ Local Pattern Matching          Claude AI (Anthropic)
  (Opportunity / Market Hunter)
         │
         ▼
- Structured Response (Telegram)
+ Structured Response (Telegram + 3D Command Center WS)
 ```
 
 - **No API key required** for Binance data — 100% public endpoints only
@@ -118,8 +127,8 @@ Local Pattern Matching          Claude AI (Anthropic)
 
 ```bash
 # Clone the repository
-git clone https://github.com/YOUR_USERNAME/jager-ai.git
-cd jager-ai
+git clone https://github.com/kaizenbnb/JAGER-AI.git
+cd JAGER-AI
 
 # Create a virtual environment (recommended)
 python -m venv venv
@@ -146,13 +155,14 @@ That's it. The bot starts polling Telegram immediately.
 ## Project Structure
 
 ```
-jager-ai/
-├── main.py                    # Telegram bot + Claude orchestration
+JAGER-AI/
+├── main.py                    # Core agent + Telegram/WebSocket orchestrator
 ├── config.py                  # Environment & settings
-├── requirements.txt
+├── demo_interface_3d.html     # Cinematic 3D Visual Command Center
+├── demo_interface.html        # 2D Backup Interface
 ├── .env.example
 ├── prompts/
-│   └── system_prompt.txt      # Agent identity & behavior
+│   └── system_prompt.txt      # Agent identity & OpenClaw alignment
 ├── tools/
 │   ├── threat_hunter.py       # Scam detection (pattern-based)
 │   ├── opportunity_hunter.py  # Product discovery (live price)
