@@ -94,6 +94,10 @@ Jager AI:
 
 As part of the intelligence suite, Jager AI includes a **Cinematic 3D Mission Control** interface (`demo_interface_3d.html`). 
 
+<p align="center">
+  <img src="demo/screenshots/command_center.webp" alt="Jager AI - 3D Command Center">
+</p>
+
 This command center connects directly to the Python backend via WebSockets, allowing you to watch the Jager AI agents (Threat, Market, Risk, Opportunity) coordinate in real-time on a holographic Binance-themed command ship while interacting via Telegram.
 
 ---
@@ -173,7 +177,11 @@ JAGER-AI/
 ├── config.py                  # Environment & settings
 ├── demo_interface_3d.html     # Cinematic 3D Visual Command Center
 ├── demo_interface.html        # 2D Backup Interface
+├── submission_text.md         # OpenClaw x Binance Application Form
 ├── .env.example
+├── demo/
+│   ├── README.md              # Demonstration Script
+│   └── screenshots/           # Hackathon visual assets
 ├── prompts/
 │   └── system_prompt.txt      # Agent identity & OpenClaw alignment
 ├── tools/
