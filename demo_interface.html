@@ -1,0 +1,1044 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Jager AI - Cinematic Demo</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700&family=Rajdhani:wght@500;700&display=swap');
+
+        body,
+        html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            background-color: #030509;
+            overflow: hidden;
+            font-family: 'Rajdhani', sans-serif;
+            color: #fff;
+        }
+
+        /* Parallax Space Background */
+        .space {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            perspective: 1000px;
+            z-index: 1;
+        }
+
+        .stars-layer {
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            right: -50%;
+            bottom: -50%;
+            background: transparent;
+            transform-origin: center;
+        }
+
+        .stars-1 {
+            background-image: radial-gradient(1px 1px at 20px 30px, #ffffff, rgba(0, 0, 0, 0)),
+                radial-gradient(1px 1px at 40px 70px, rgba(255, 255, 255, 0.8), rgba(0, 0, 0, 0)),
+                radial-gradient(1.5px 1.5px at 90px 40px, #f3ba2f, rgba(0, 0, 0, 0));
+            background-repeat: repeat;
+            background-size: 200px 200px;
+            animation: warp 10s linear infinite;
+            opacity: 0.5;
+        }
+
+        .stars-2 {
+            background-image: radial-gradient(2px 2px at 50px 160px, rgba(255, 255, 255, 0.9), rgba(0, 0, 0, 0)),
+                radial-gradient(1px 1px at 90px 40px, rgba(255, 255, 255, 0.6), rgba(0, 0, 0, 0)),
+                radial-gradient(2px 2px at 130px 80px, #3b82f6, rgba(0, 0, 0, 0));
+            background-repeat: repeat;
+            background-size: 300px 300px;
+            animation: warp 5s linear infinite;
+            opacity: 0.8;
+        }
+
+        .stars-3 {
+            background-image: radial-gradient(3px 3px at 150px 150px, #ffffff, rgba(0, 0, 0, 0)),
+                radial-gradient(2px 2px at 120px 230px, #f3ba2f, rgba(0, 0, 0, 0));
+            background-repeat: repeat;
+            background-size: 400px 400px;
+            animation: warp 2.5s linear infinite;
+            opacity: 1;
+        }
+
+        @keyframes warp {
+            from {
+                transform: translateY(0);
+            }
+
+            to {
+                transform: translateY(100%);
+            }
+        }
+
+        /* Speed trails / hyperspace effect occasionally */
+        .speed-lines {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(180deg, rgba(243, 186, 47, 0) 0%, rgba(243, 186, 47, 0.05) 50%, rgba(243, 186, 47, 0) 100%);
+            background-size: 100% 200%;
+            animation: lightspeed 2s infinite linear;
+            z-index: 2;
+            opacity: 0.3;
+        }
+
+        @keyframes lightspeed {
+            0% {
+                background-position: 0 -100%;
+            }
+
+            100% {
+                background-position: 0 100%;
+            }
+        }
+
+        /* 3D Scene Container */
+        .scene {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 10;
+            perspective: 1200px;
+        }
+
+        /* The Spaceship (Binance Logo Shape) */
+        .spaceship-container {
+            position: relative;
+            width: 800px;
+            height: 800px;
+            transform: rotateX(45deg) rotateZ(45deg);
+            /* Isometric view */
+            transform-style: preserve-3d;
+            animation: ship-hover 4s ease-in-out infinite alternate;
+        }
+
+        @keyframes ship-hover {
+            0% {
+                transform: rotateX(45deg) rotateZ(45deg) translateZ(-10px);
+            }
+
+            100% {
+                transform: rotateX(45deg) rotateZ(45deg) translateZ(20px);
+            }
+        }
+
+        /* Base Platform (The Diamond) */
+        .ship-base {
+            position: absolute;
+            top: 100px;
+            left: 100px;
+            right: 100px;
+            bottom: 100px;
+            background: linear-gradient(135deg, #181a20, #0b0e14);
+            border: 4px solid #333;
+            box-shadow:
+                inset 0 0 50px rgba(0, 0, 0, 0.8),
+                0 0 20px rgba(243, 186, 47, 0.2),
+                /* Thruster glow */
+                20px 20px 60px rgba(0, 0, 0, 0.6);
+            /* Drop shadow in space */
+            transform: translateZ(0);
+            transform-style: preserve-3d;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        /* Glowing grid on the ship floor */
+        .ship-grid {
+            position: абсолюte;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-image:
+                linear-gradient(rgba(243, 186, 47, 0.1) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(243, 186, 47, 0.1) 1px, transparent 1px);
+            background-size: 50px 50px;
+            opacity: 0.5;
+            pointer-events: none;
+        }
+
+        /* Binance Decals */
+        .b-decal {
+            position: absolute;
+            width: 80px;
+            height: 80px;
+            opacity: 0.15;
+            fill: #f3ba2f;
+        }
+
+        .b-decal-1 {
+            top: 20px;
+            left: 20px;
+        }
+
+        .b-decal-2 {
+            bottom: 20px;
+            right: 20px;
+            transform: rotate(180deg);
+        }
+
+        /* The Bridge (Jager's Command Center) */
+        .bridge {
+            position: absolute;
+            width: 250px;
+            height: 250px;
+            background: rgba(20, 22, 28, 0.9);
+            border: 2px solid #555;
+            border-radius: 50%;
+            transform: translateZ(40px);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            box-shadow: 0 0 30px rgba(0, 0, 0, 0.8), inset 0 0 40px rgba(243, 186, 47, 0.15);
+            transition: all 0.3s;
+            transform-style: preserve-3d;
+        }
+
+        .bridge.active {
+            border-color: #f3ba2f;
+            box-shadow: 0 0 50px rgba(243, 186, 47, 0.6), inset 0 0 60px rgba(243, 186, 47, 0.4);
+        }
+
+        /* The Desk Console */
+        .desk {
+            position: absolute;
+            width: 140px;
+            height: 80px;
+            background: linear-gradient(135deg, #2a2d35, #12141a);
+            bottom: 30px;
+            border-radius: 40px 40px 10px 10px;
+            border-top: 3px solid #f3ba2f;
+            transform: translateZ(10px) rotateZ(-45deg);
+            /* Counter-rotate to face camera roughly */
+            box-shadow: 0 10px 15px rgba(0, 0, 0, 0.6);
+            display: flex;
+            justify-content: space-around;
+            align-items: flex-start;
+            padding-top: 10px;
+            box-sizing: border-box;
+        }
+
+        /* Desk monitors/holograms */
+        .holo-screen {
+            width: 30px;
+            height: 20px;
+            background: rgba(42, 171, 238, 0.2);
+            border: 1px solid #2aabee;
+            border-radius: 3px;
+            transform: translateY(-25px) rotateX(-20deg);
+            box-shadow: 0 0 10px rgba(42, 171, 238, 0.4);
+            animation: flicker 4s infinite alternate;
+        }
+
+        /* Jager Character (The "Muñequito") */
+        .jager-char {
+            position: absolute;
+            width: 50px;
+            height: 70px;
+            bottom: 50px;
+            /* Sitting behind desk */
+            transform: translateZ(30px) rotateZ(-45deg);
+            z-index: 5;
+            transition: transform 0.2s;
+        }
+
+        /* Jager Body Parts (Robot/Cybersuit look) */
+        .jager-head {
+            position: absolute;
+            top: 0;
+            left: 10px;
+            width: 30px;
+            height: 30px;
+            background: #e2e8f0;
+            border-radius: 8px 8px 12px 12px;
+            box-shadow: inset -3px -3px 5px rgba(0, 0, 0, 0.3);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        /* Jager's Visor */
+        .jager-visor {
+            width: 20px;
+            height: 8px;
+            background: #f3ba2f;
+            border-radius: 3px;
+            box-shadow: 0 0 10px #f3ba2f;
+            animation: pulse-visor 2s infinite alternate;
+            transition: background 0.3s;
+        }
+
+        .jager-body {
+            position: absolute;
+            top: 32px;
+            left: 5px;
+            width: 40px;
+            height: 30px;
+            background: #334155;
+            border-radius: 5px 5px 15px 15px;
+            border-top: 2px solid #f3ba2f;
+        }
+
+        .jager-arm {
+            position: absolute;
+            top: 35px;
+            width: 8px;
+            height: 20px;
+            background: #94a3b8;
+            border-radius: 4px;
+        }
+
+        .arm-l {
+            left: -5px;
+            transform: rotate(20deg);
+        }
+
+        .arm-r {
+            right: -5px;
+            transform: rotate(-20deg);
+        }
+
+        /* Animation when typing/working */
+        .bridge.active .jager-char .arm-l {
+            transform: rotate(45deg);
+            animation: typing-l 0.2s infinite alternate;
+        }
+
+        .bridge.active .jager-char .arm-r {
+            transform: rotate(-45deg);
+            animation: typing-r 0.2s infinite alternate;
+        }
+
+        .bridge.active .jager-char .jager-visor {
+            background: #10b981;
+            box-shadow: 0 0 15px #10b981;
+        }
+
+        @keyframes typing-l {
+            from {
+                transform: rotate(35deg) translateY(-2px);
+            }
+
+            to {
+                transform: rotate(45deg) translateY(2px);
+            }
+        }
+
+        @keyframes typing-r {
+            from {
+                transform: rotate(-35deg) translateY(2px);
+            }
+
+            to {
+                transform: rotate(-45deg) translateY(-2px);
+            }
+        }
+
+        /* Satellite Stations (Corners) */
+        .station {
+            position: absolute;
+            width: 120px;
+            height: 120px;
+            background: rgba(15, 20, 30, 0.9);
+            border: 2px solid #444;
+            border-radius: 15px;
+            transform: translateZ(20px);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.8);
+            transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            transform-style: preserve-3d;
+        }
+
+        /* 3D Pillars/Antennas on stations */
+        .antenna {
+            position: absolute;
+            top: -20px;
+            right: -20px;
+            width: 5px;
+            height: 40px;
+            background: #fff;
+            transform: translateZ(10px) rotateX(90deg);
+            border-radius: 2px;
+            display: none;
+            /* Can enable for extra 3D, but might clutter */
+        }
+
+        /* Counter-rotate text so it faces camera */
+        .station-content {
+            transform: rotateZ(-45deg);
+            /* Counter the ship's rotation */
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
+        }
+
+        .station-icon {
+            font-size: 28px;
+            margin-bottom: 8px;
+            filter: drop-shadow(0 0 5px rgba(255, 255, 255, 0.5));
+        }
+
+        .station-name {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 11px;
+            color: #ccc;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+        }
+
+        .station-status {
+            font-size: 9px;
+            color: #666;
+            margin-top: 4px;
+            padding: 2px 6px;
+            border-radius: 10px;
+            background: rgba(0, 0, 0, 0.5);
+            border: 1px solid #333;
+        }
+
+        /* Positions */
+        #threat-station {
+            top: 20px;
+            left: 20px;
+            border-bottom-color: #ef4444;
+        }
+
+        #opp-station {
+            top: 20px;
+            right: 20px;
+            border-left-color: #10b981;
+        }
+
+        #market-station {
+            bottom: 20px;
+            left: 20px;
+            border-right-color: #3b82f6;
+        }
+
+        #risk-station {
+            bottom: 20px;
+            right: 20px;
+            border-top-color: #8b5cf6;
+        }
+
+        /* Activating Stations */
+        #threat-station.active {
+            border-color: #ef4444;
+            box-shadow: 0 0 40px rgba(239, 68, 68, 0.5);
+            transform: translateZ(50px);
+        }
+
+        #threat-station.active .station-status {
+            color: #fca5a5;
+            border-color: #ef4444;
+            text-shadow: 0 0 5px #ef4444;
+        }
+
+        #opp-station.active {
+            border-color: #10b981;
+            box-shadow: 0 0 40px rgba(16, 185, 129, 0.5);
+            transform: translateZ(50px);
+        }
+
+        #opp-station.active .station-status {
+            color: #6ee7b7;
+            border-color: #10b981;
+            text-shadow: 0 0 5px #10b981;
+        }
+
+        #market-station.active {
+            border-color: #3b82f6;
+            box-shadow: 0 0 40px rgba(59, 130, 246, 0.5);
+            transform: translateZ(50px);
+        }
+
+        #market-station.active .station-status {
+            color: #93c5fd;
+            border-color: #3b82f6;
+            text-shadow: 0 0 5px #3b82f6;
+        }
+
+        #risk-station.active {
+            border-color: #8b5cf6;
+            box-shadow: 0 0 40px rgba(139, 92, 246, 0.5);
+            transform: translateZ(50px);
+        }
+
+        #risk-station.active .station-status {
+            color: #c4b5fd;
+            border-color: #8b5cf6;
+            text-shadow: 0 0 5px #8b5cf6;
+        }
+
+        /* Energy Beams (Data transfer) */
+        .beam-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 20;
+            transform-style: preserve-3d;
+        }
+
+        .beam {
+            position: absolute;
+            background: linear-gradient(90deg, transparent, #fff, transparent);
+            height: 4px;
+            transform-origin: left center;
+            opacity: 0;
+            box-shadow: 0 0 15px #fff;
+        }
+
+        .beam.active {
+            animation: shoot-beam 0.5s ease-out forwards;
+        }
+
+        @keyframes shoot-beam {
+            0% {
+                width: 0;
+                opacity: 1;
+                margin-left: 0;
+            }
+
+            50% {
+                opacity: 1;
+            }
+
+            100% {
+                width: 0;
+                opacity: 0;
+                margin-left: var(--length);
+            }
+        }
+
+        /* Cinematic HUD Elements (Camera Frame Overlay) */
+        .hud {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 100;
+        }
+
+        .hud-corner {
+            position: absolute;
+            width: 40px;
+            height: 40px;
+            border: 2px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .hud-tl {
+            top: 20px;
+            left: 20px;
+            border-right: none;
+            border-bottom: none;
+        }
+
+        .hud-tr {
+            top: 20px;
+            right: 20px;
+            border-left: none;
+            border-bottom: none;
+        }
+
+        .hud-bl {
+            bottom: 20px;
+            left: 20px;
+            border-right: none;
+            border-top: none;
+        }
+
+        .hud-br {
+            bottom: 20px;
+            right: 20px;
+            border-left: none;
+            border-top: none;
+        }
+
+        .hud-text {
+            position: absolute;
+            bottom: 25px;
+            right: 80px;
+            font-family: 'Orbitron', monospace;
+            font-size: 12px;
+            color: rgba(243, 186, 47, 0.6);
+            text-align: right;
+        }
+
+        /* Telegram Realistic Chat UI */
+        .tg-ui {
+            position: absolute;
+            bottom: 30px;
+            left: 40px;
+            width: 320px;
+            background: rgba(14, 22, 33, 0.85);
+            /* Telegram dark mode color */
+            backdrop-filter: blur(10px);
+            border-radius: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.8);
+            z-index: 150;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            transform: translateY(120%);
+            transition: transform 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        .tg-ui.visible {
+            transform: translateY(0);
+        }
+
+        .tg-header {
+            background: rgba(23, 33, 43, 0.9);
+            padding: 10px 15px;
+            display: flex;
+            align-items: center;
+            border-bottom: 1px solid rgba(0, 0, 0, 0.2);
+        }
+
+        .tg-avatar {
+            width: 35px;
+            height: 35px;
+            background: #f3ba2f;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            color: #000;
+            margin-right: 12px;
+        }
+
+        .tg-title-box {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .tg-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: #fff;
+        }
+
+        .tg-subtitle {
+            font-size: 11px;
+            color: #2AABEE;
+            margin-top: 2px;
+        }
+
+        .tg-body {
+            padding: 15px;
+            min-height: 50px;
+        }
+
+        .chat-bubble {
+            background: #2b5278;
+            /* TG outgoing message base color */
+            color: #fff;
+            padding: 10px 14px;
+            border-radius: 12px 12px 12px 2px;
+            font-size: 14px;
+            line-height: 1.4;
+            display: inline-block;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+            position: relative;
+            transform: scale(0.9);
+            opacity: 0;
+            transform-origin: bottom left;
+            transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        .chat-bubble.show {
+            transform: scale(1);
+            opacity: 1;
+        }
+
+        .chat-cmd {
+            color: #64B5F6;
+            font-family: monospace;
+        }
+
+        .chat-time {
+            font-size: 10px;
+            color: rgba(255, 255, 255, 0.5);
+            float: right;
+            margin-top: 8px;
+            margin-left: 10px;
+        }
+
+        /* Controls Instructions */
+        #controls-overlay {
+            position: absolute;
+            top: 30px;
+            right: 30px;
+            background: rgba(0, 0, 0, 0.5);
+            border: 1px solid #333;
+            padding: 15px;
+            border-radius: 8px;
+            font-size: 12px;
+            z-index: 1000;
+            font-family: 'Rajdhani', sans-serif;
+            transition: opacity 0.3s;
+        }
+
+        kbd {
+            background: #f3ba2f;
+            color: #000;
+            padding: 2px 5px;
+            border-radius: 3px;
+            font-weight: bold;
+        }
+    </style>
+</head>
+
+<body>
+
+    <!-- Instructions Overlay -->
+    <div id="controls-overlay">
+        <h3 style="margin:0 0 10px 0; color:#f3ba2f; text-transform:uppercase;">Director Dashboard</h3>
+        <p>Press <kbd>1</kbd> Threat Detection</p>
+        <p>Press <kbd>2</kbd> Arbitrage Hunt</p>
+        <p>Press <kbd>3</kbd> Market Analysis</p>
+        <p>Press <kbd>4</kbd> Exposure Eval</p>
+        <p style="margin-top:10px; opacity:0.7;">Press <kbd>H</kbd> to Hide/Show this menu</p>
+    </div>
+
+    <!-- Background -->
+    <div class="space">
+        <div class="stars-layer stars-1"></div>
+        <div class="stars-layer stars-2"></div>
+        <div class="stars-layer stars-3"></div>
+        <div class="speed-lines"></div>
+    </div>
+
+    <!-- Cinematic HUD -->
+    <div class="hud">
+        <div class="hud-corner hud-tl"></div>
+        <div class="hud-corner hud-tr"></div>
+        <div class="hud-corner hud-bl"></div>
+        <div class="hud-corner hud-br"></div>
+        <div class="hud-text">
+            SYS.STATUS = [NOMINAL]<br>
+            COORDS = 14:AB:99:FX<br>
+            SPEED = 0.94c
+        </div>
+    </div>
+
+    <!-- 3D Scene / Spaceship -->
+    <div class="scene">
+        <div class="spaceship-container" id="ship">
+            <!-- The Base Diamond -->
+            <div class="ship-base">
+                <div class="ship-grid"></div>
+                <!-- Decals -->
+                <svg class="b-decal b-decal-1" viewBox="0 0 24 24">
+                    <path
+                        d="M16.624 13.9202L12 18.5442L7.376 13.9202L4.216 17.0802L12 24.8643L19.784 17.0802L16.624 13.9202ZM12 5.47466L16.624 10.0987L19.784 6.93867L12 -0.845337L4.216 6.93867L7.376 10.0987L12 5.47466ZM4.216 13.9202L7.376 10.7602L4.216 7.60022L1.056 10.7602L4.216 13.9202ZM19.784 13.9202L22.944 10.7602L19.784 7.60022L16.624 10.7602L19.784 13.9202ZM12 15.4243L16.664 10.7602L12 6.09622L7.336 10.7602L12 15.4243Z" />
+                </svg>
+                <svg class="b-decal b-decal-2" viewBox="0 0 24 24">
+                    <path
+                        d="M16.624 13.9202L12 18.5442L7.376 13.9202L4.216 17.0802L12 24.8643L19.784 17.0802L16.624 13.9202ZM12 5.47466L16.624 10.0987L19.784 6.93867L12 -0.845337L4.216 6.93867L7.376 10.0987L12 5.47466ZM4.216 13.9202L7.376 10.7602L4.216 7.60022L1.056 10.7602L4.216 13.9202ZM19.784 13.9202L22.944 10.7602L19.784 7.60022L16.624 10.7602L19.784 13.9202ZM12 15.4243L16.664 10.7602L12 6.09622L7.336 10.7602L12 15.4243Z" />
+                </svg>
+
+                <!-- Beams Container (Renders on floor plane) -->
+                <div class="beam-container" id="beams"></div>
+
+                <!-- Center: Jager Controller Bridge -->
+                <div class="bridge" id="jager-bridge">
+                    <div class="jager-char">
+                        <div class="jager-head">
+                            <div class="jager-visor"></div>
+                        </div>
+                        <div class="jager-body"></div>
+                        <div class="jager-arm arm-l"></div>
+                        <div class="jager-arm arm-r"></div>
+                    </div>
+                    <div class="desk">
+                        <div class="holo-screen" style="animation-delay: 0.1s"></div>
+                        <div class="holo-screen"
+                            style="width: 40px; border-color:#f3ba2f; background: rgba(243,186,47,0.2);"></div>
+                        <div class="holo-screen" style="animation-delay: 0.5s"></div>
+                    </div>
+                </div>
+
+                <!-- 4 Satellite Pods -->
+                <div class="station" id="threat-station">
+                    <div class="station-content">
+                        <div class="station-icon">🛡️</div>
+                        <div class="station-name">Threat</div>
+                        <div class="station-status">STANDBY</div>
+                    </div>
+                </div>
+
+                <div class="station" id="opp-station">
+                    <div class="station-content">
+                        <div class="station-icon">⚡</div>
+                        <div class="station-name">Opport.</div>
+                        <div class="station-status">STANDBY</div>
+                    </div>
+                </div>
+
+                <div class="station" id="market-station">
+                    <div class="station-content">
+                        <div class="station-icon">📊</div>
+                        <div class="station-name">Market</div>
+                        <div class="station-status">STANDBY</div>
+                    </div>
+                </div>
+
+                <div class="station" id="risk-station">
+                    <div class="station-content">
+                        <div class="station-icon">⚖️</div>
+                        <div class="station-name">Risk</div>
+                        <div class="station-status">STANDBY</div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <!-- Telegram Interface Overlay -->
+    <div class="tg-ui" id="tg-panel">
+        <div class="tg-header">
+            <div class="tg-avatar">J</div>
+            <div class="tg-title-box">
+                <div class="tg-title">Jager AI (Mission Control)</div>
+                <div class="tg-subtitle">bot online</div>
+            </div>
+        </div>
+        <div class="tg-body" id="tg-chat-container">
+            <div class="chat-bubble" id="chat-msg">
+                <!-- Content injected via JS -->
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- 1. Audio Effects (Synthesized to avoid loading external files) ---
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+        function playBlip(freq, duration, type = 'sine') {
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+            const osc = audioCtx.createOscillator();
+            const gainNode = audioCtx.createGain();
+            osc.type = type;
+            osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+            osc.frequency.exponentialRampToValueAtTime(freq / 2, audioCtx.currentTime + duration);
+
+            gainNode.gain.setValueAtTime(0.1, audioCtx.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + duration);
+
+            osc.connect(gainNode);
+            gainNode.connect(audioCtx.destination);
+            osc.start();
+            osc.stop(audioCtx.currentTime + duration);
+        }
+
+        // --- 2. Beams routing (Calculate lines from center to corners) ---
+        const beamsContainer = document.getElementById('beams');
+
+        function createBeam(targetId, color) {
+            const bridge = document.getElementById('jager-bridge');
+            const target = document.getElementById(targetId);
+
+            // Assume 600x600 size for ship-base. Center is 300,300
+            const cx = 300, cy = 300;
+
+            // Get target center coordinates based on its top/left/right/bottom
+            let tx, ty;
+            const style = window.getComputedStyle(target);
+            if (style.top !== 'auto') ty = parseInt(style.top) + 60; // top + half height
+            else ty = 600 - parseInt(style.bottom) - 60;
+
+            if (style.left !== 'auto') tx = parseInt(style.left) + 60;
+            else tx = 600 - parseInt(style.right) - 60;
+
+            const dx = tx - cx; const dy = ty - cy;
+            const distance = Math.sqrt(dx * dx + dy * dy) - 130; // 130 margin (bridge radius + gap)
+            const angle = Math.atan2(dy, dx) * 180 / Math.PI;
+
+            const beam = document.createElement('div');
+            beam.className = 'beam';
+            beam.style.width = `${distance}px`;
+            beam.style.left = `${cx}px`;
+            beam.style.top = `${cy}px`;
+            // Add bridge radius (approx 125) to move start point to edge of bridge
+            beam.style.transform = `translateY(-50%) rotate(${angle}deg) translateX(125px)`;
+
+            // Set animation custom properties
+            beam.style.setProperty('--length', `${distance}px`);
+            beam.style.background = `linear-gradient(90deg, transparent, ${color}, transparent)`;
+            beam.style.boxShadow = `0 0 15px ${color}`;
+
+            beamsContainer.appendChild(beam);
+
+            // Trigger animation immediately
+            requestAnimationFrame(() => {
+                beam.classList.add('active');
+            });
+
+            // Remove after animation completes
+            setTimeout(() => {
+                beam.remove();
+            }, 600);
+        }
+
+        // --- 3. Scenario Logic ---
+        const scenarios = {
+            1: {
+                id: 'threat',
+                node: 'threat-station',
+                cmd: '/scan',
+                msg: "Emergency pattern detected in mempool. Isolating node...",
+                color: "#ef4444",
+                freq: 800
+            },
+            2: {
+                id: 'opp',
+                node: 'opp-station',
+                cmd: '/hunt',
+                msg: "Arbitrage gap: BNB/USDT vs. BNB/FDUSD. Executing.",
+                color: "#10b981",
+                freq: 1200
+            },
+            3: {
+                id: 'market',
+                node: 'market-station',
+                cmd: '/analyze',
+                msg: "Volume delta divergence on SOL perps. Compiling report.",
+                color: "#3b82f6",
+                freq: 600
+            },
+            4: {
+                id: 'risk',
+                node: 'risk-station',
+                cmd: '/risk',
+                msg: "Rebalancing wallet B3. Exposure bounds exceeded.",
+                color: "#8b5cf6",
+                freq: 400
+            }
+        };
+
+        const tgPanel = document.getElementById('tg-panel');
+        const chatMsg = document.getElementById('chat-msg');
+        const bridge = document.getElementById('jager-bridge');
+
+        let isAnimating = false;
+
+        function triggerScenario(key) {
+            if (isAnimating) return;
+            const s = scenarios[key];
+            if (!s) return;
+
+            isAnimating = true;
+
+            // Reset UI
+            document.querySelectorAll('.station-status').forEach(el => {
+                el.innerText = 'STANDBY';
+                el.style.background = 'rgba(0,0,0,0.5)';
+            });
+            document.querySelectorAll('.station').forEach(el => el.classList.remove('active'));
+            chatMsg.classList.remove('show');
+
+            // 1. Show Telegram Panel & play sound
+            playBlip(s.freq, 0.2, 'square');
+            tgPanel.classList.add('visible');
+
+            // Generate Time string
+            const now = new Date();
+            const timeStr = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
+
+            chatMsg.innerHTML = `<span class="chat-cmd">${s.cmd}</span> ${s.msg} <div class="chat-time">${timeStr}</div>`;
+
+            setTimeout(() => {
+                chatMsg.classList.add('show');
+
+                // 2. Activate Bridge (Jager starts typing/working)
+                bridge.classList.add('active');
+
+                // 3. Shoot Data Beam
+                setTimeout(() => {
+                    createBeam(s.node, s.color);
+                    playBlip(s.freq * 1.5, 0.5, 'sawtooth');
+
+                    // 4. Activate Satellite Station
+                    setTimeout(() => {
+                        const station = document.getElementById(s.node);
+                        station.classList.add('active');
+                        station.querySelector('.station-status').innerText = 'EXECUTING';
+                        station.querySelector('.station-status').style.background = 'rgba(255,255,255,0.1)';
+
+                        // 5. Complete cycle
+                        setTimeout(() => {
+                            bridge.classList.remove('active');
+                            station.querySelector('.station-status').innerText = 'DONE';
+
+                            setTimeout(() => {
+                                station.classList.remove('active');
+                                station.querySelector('.station-status').innerText = 'STANDBY';
+                                station.querySelector('.station-status').style.background = 'rgba(0,0,0,0.5)';
+
+                                // Hide TG panel after a bit
+                                setTimeout(() => {
+                                    tgPanel.classList.remove('visible');
+                                    isAnimating = false;
+                                }, 1500);
+
+                            }, 1000); // Wait in DONE state
+                        }, 1500); // Execution time
+
+                    }, 400); // Beam travel time
+
+                }, 800); // Reading message time
+
+            }, 300); // Panel slide-in time
+        }
+
+        // --- 4. Controls Handling ---
+        const controls = document.getElementById('controls-overlay');
+        document.addEventListener('keydown', (e) => {
+            // Numbers 1-4 trigger scenarios
+            if (['1', '2', '3', '4'].includes(e.key)) {
+                if (audioCtx.state === 'suspended') audioCtx.resume();
+                triggerScenario(e.key);
+            }
+            // 'H' hides controls for recording
+            if (e.key.toLowerCase() === 'h') {
+                controls.style.opacity = controls.style.opacity === '0' ? '1' : '0';
+            }
+        });
+
+    </script>
+</body>
+
+</html>

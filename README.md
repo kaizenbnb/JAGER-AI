@@ -9,7 +9,20 @@
 
 ---
 
-**An OpenClaw-compatible AI intelligence assistant for the Binance ecosystem, demonstrated through a Telegram interface and a visual command-center prototype.**
+**Built for the OpenClaw x Binance Social Contest**  
+*Interface demo: Telegram bot + 3D command-center prototype*
+
+**An OpenClaw-compatible AI intelligence assistant for the Binance ecosystem.**
+
+## Contest Submission Snapshot
+
+- **Project Name:** Jager AI
+- **Category:** Smart Operations / Marketing & Education / Product Optimization
+- **Interface:** Telegram + 3D command-center prototype
+- **Core Functions:** Scam detection, Binance product discovery, market pulse, risk warnings
+- **Stack:** Python, Anthropic API, Binance public endpoints
+
+---
 
 ## The Name
 
@@ -176,14 +189,12 @@ JAGER-AI/
 
 ---
 
-## Value for the Binance Ecosystem
+## Why this matters for Binance
 
-| Challenge | How Jager AI Helps |
-|-----------|-------------------|
-| Rising scam activity | Instant pattern-based threat detection |
-| Underutilization of products | Contextual, goal-based product discovery |
-| Information overload | Narrative summaries instead of raw data |
-| Poor risk management | Educational warnings before dangerous trades |
+- **Safer users:** Instant pattern-based threat detection protects users from scams and phishing attempts.
+- **Better product discovery:** Contextual, goal-based suggestions guide users to Launchpool, Earn, and Staking appropriately.
+- **Simpler market education:** Translates chaotic market data into clear narrative summaries.
+- **Smarter risk awareness:** Educational warnings flag dangerous setups (e.g., max leverage on volatile assets) before execution.
 
 Jager AI demonstrates how AI agents can become an intelligent interface layer between users and the complexity of modern crypto ecosystems.
 

@@ -16,7 +16,7 @@ SYSTEM_PROMPT_PATH = PROMPTS_DIR / "system_prompt.txt"
 
 # ── API Keys ───────────────────────────────────────────────────────────────
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
-ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 ADMIN_TELEGRAM_ID = os.getenv("ADMIN_TELEGRAM_ID")
 
 # ── Binance ────────────────────────────────────────────────────────────────
@@ -26,7 +26,7 @@ BINANCE_BASE_URL = os.getenv("BINANCE_BASE_URL", "https://api.binance.com")
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
 
 # ── Model ──────────────────────────────────────────────────────────────────
-CLAUDE_MODEL = "claude-opus-4-5"
+OPENAI_MODEL = "gpt-4o-mini"
 MAX_TOKENS = 1024
 
 # ── Validation ─────────────────────────────────────────────────────────────
@@ -34,8 +34,8 @@ def validate():
     missing = []
     if not TELEGRAM_BOT_TOKEN:
         missing.append("TELEGRAM_BOT_TOKEN")
-    if not ANTHROPIC_API_KEY:
-        missing.append("ANTHROPIC_API_KEY")
+    if not OPENAI_API_KEY:
+        missing.append("OPENAI_API_KEY")
     if missing:
         raise EnvironmentError(
             f"Missing required environment variables: {', '.join(missing)}\n"
