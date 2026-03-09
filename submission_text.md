@@ -1,12 +1,12 @@
-# Jager AI - Contest Submission Text
+# JAGER AI - Contest Submission Text
 
 ## What’s the name of your project? How does it relate to Binance?
 
-Jager AI is an AI intelligence assistant designed for the Binance ecosystem.
+JAGER AI is an AI intelligence assistant designed for the Binance ecosystem.
 
-Inspired by “Jager” as a cultural Binance reference to the smallest unit of BNB, the project is built around the idea that small insights lead to smarter decisions.
+Inspired by “JAGER” as a cultural Binance reference to the smallest unit of BNB, the project is built around the idea that small insights lead to smarter decisions.
 
-Jager AI helps users interact with Binance more safely and effectively through four core functions:
+JAGER AI helps users interact with Binance more safely and effectively through four core functions:
 1. Threat Hunter — detects scam patterns, phishing attempts, fake support messages, and seed phrase requests.
 2. Opportunity Hunter — helps users discover relevant Binance products such as Launchpool, Earn, and BNB utilities.
 3. Market Hunter — summarizes public market signals and narrative trends into simple insights.

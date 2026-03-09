@@ -1,6 +1,6 @@
-# 🐺 Jager AI — Intelligence Agent for the Binance Ecosystem
+# 🐺 JAGER AI — Intelligence Agent for the Binance Ecosystem
 
-> *Every BNB is made of Jägers. Every good decision is made of small insights.*
+> *Every BNB is made of JAGER. Every good decision is made of small insights.*
 
 [![Python](https://img.shields.io/badge/Python-3.11+-blue.svg)](https://python.org)
 [![Telegram](https://img.shields.io/badge/Interface-Telegram%20Bot-blue)](https://telegram.org)
@@ -16,7 +16,7 @@
 
 ## Contest Submission Snapshot
 
-- **Project Name:** Jager AI
+- **Project Name:** JAGER AI
 - **Category:** Smart Operations / Marketing & Education / Product Optimization
 - **Interface:** Telegram + 3D command-center prototype
 - **Core Functions:** Scam detection, Binance product discovery, market pulse, risk warnings
@@ -26,19 +26,19 @@
 
 ## The Name
 
-**Jager** was one of the earliest Binance Angels — a community figure whose name became synonymous with the idea of a very small, fundamental unit of BNB, similar to how *Satoshi* is the smallest unit of Bitcoin.
+**JAGER** was one of the earliest Binance Angels — a community figure whose name became synonymous with the idea of a very small, fundamental unit of BNB, similar to how *Satoshi* is the smallest unit of Bitcoin.
 
-One Jäger = `0.00000001 BNB`.
+One JAGER = `0.00000001 BNB`.
 
-This project embraces that metaphor: just as many small Jägers form the value of BNB, many small insights form better decisions for crypto users.
+This project embraces that metaphor: just as many small JAGER form the value of BNB, many small insights form better decisions for crypto users.
 
-**Jager AI is the intelligence layer that delivers those insights.**
+**JAGER AI is the intelligence layer that delivers those insights.**
 
 ---
 
 ## What It Does
 
-Jager AI is designed to help users interact more intelligently and safely with the Binance ecosystem. By adhering to agentic design patterns, it serves as a robust reconnaissance node.
+JAGER AI is designed to help users interact more intelligently and safely with the Binance ecosystem. By adhering to agentic design patterns, it serves as a robust reconnaissance node.
 
 ### Four Core Intelligence Modules
 
@@ -56,7 +56,7 @@ Jager AI is designed to help users interact more intelligently and safely with t
 ```
 User: Someone from Binance support asked me for my seed phrase.
 
-Jager AI:
+JAGER AI:
 🚨 Threat Hunter — CRITICAL RISK DETECTED
 
 🔴 CRITICAL — Seed Phrase / Private Key Request
@@ -70,7 +70,7 @@ What you should know:
 ```
 User: I hold BNB. What can I do with it?
 
-Jager AI:
+JAGER AI:
 🎯 Opportunity Hunter
 
 💰 BNB Price: $612.45 📈 +2.3% (24h)
@@ -92,13 +92,13 @@ Jager AI:
 
 ## Visual Command Center
 
-As part of the intelligence suite, Jager AI includes a **Cinematic 3D Mission Control** interface (`demo_interface_3d.html`). 
+As part of the intelligence suite, JAGER AI includes a **Cinematic 3D Mission Control** interface (`demo_interface_3d.html`). 
 
 <p align="center">
-  <img src="demo/screenshots/command_center.webp" alt="Jager AI - 3D Command Center">
+  <img src="demo/screenshots/command_center.webp" alt="JAGER AI - 3D Command Center">
 </p>
 
-This command center connects directly to the Python backend via WebSockets, allowing you to watch the Jager AI agents (Threat, Market, Risk, Opportunity) coordinate in real-time on a holographic Binance-themed command ship while interacting via Telegram.
+This command center connects directly to the Python backend via WebSockets, allowing you to watch the JAGER AI agents (Threat, Market, Risk, Opportunity) coordinate in real-time on a holographic Binance-themed command ship while interacting via Telegram.
 
 ---
 
@@ -204,7 +204,7 @@ JAGER-AI/
 - **Simpler market education:** Translates chaotic market data into clear narrative summaries.
 - **Smarter risk awareness:** Educational warnings flag dangerous setups (e.g., max leverage on volatile assets) before execution.
 
-Jager AI demonstrates how AI agents can become an intelligent interface layer between users and the complexity of modern crypto ecosystems.
+JAGER AI demonstrates how AI agents can become an intelligent interface layer between users and the complexity of modern crypto ecosystems.
 
 ---
 
@@ -233,5 +233,4 @@ MIT License — see [LICENSE](LICENSE)
 
 ---
 
-*Built for the Binance ecosystem. Powered by small insights.*
-*Every BNB is made of Jägers. Every good decision is made of small insights.*
+*Every BNB is made of JAGER. Every good decision is made of small insights.*

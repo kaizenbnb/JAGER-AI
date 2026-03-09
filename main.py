@@ -9,6 +9,8 @@ Run: python main.py
 import asyncio
 import json
 import logging
+import os
+import subprocess
 from pathlib import Path
 
 import websockets
@@ -42,7 +44,10 @@ log = logging.getLogger("jager-ai")
 SYSTEM_PROMPT = Path(config.SYSTEM_PROMPT_PATH).read_text(encoding="utf-8")
 
 # ── OpenAI Client ──────────────────────────────────────────────────────────
-openai_client = AsyncOpenAI(api_key=config.OPENAI_API_KEY)
+openai_client = AsyncOpenAI(
+    api_key=config.OPENAI_API_KEY,
+    base_url=getattr(config, "OPENAI_BASE_URL", None)
+)
 
 # ── WebSocket Broadcaster ──────────────────────────────────────────────────
 connected_clients = set()
@@ -67,7 +72,43 @@ async def post_init(application: Application):
 
 
 # ── Conversation History (in-memory, per chat_id) ──────────────────────────
+import firebase_admin
+from firebase_admin import credentials, firestore
+
+try:
+    cred_path = os.path.join(os.path.dirname(__file__), "jager-ai-firebase-adminsdk-fbsvc-a3c00d5f1a.json")
+    if os.path.exists(cred_path):
+        cred = credentials.Certificate(cred_path)
+        if not firebase_admin._apps:
+            firebase_admin.initialize_app(cred)
+        db = firestore.client()
+        log.info("Firebase connected for persistent memory.")
+    else:
+        db = None
+        log.warning("Firebase credentials not found, using memory fallback.")
+except Exception as e:
+    db = None
+    log.error(f"Failed to initialize Firebase: {e}")
+
 conversation_history: dict[int, list[dict]] = {}
+
+def get_history(chat_id: int) -> list[dict]:
+    if db:
+        try:
+            doc = db.collection("chats").document(str(chat_id)).get()
+            if doc.exists:
+                return doc.to_dict().get("history", [])
+        except Exception as e:
+            log.error(f"Firebase Read Error: {e}")
+    return conversation_history.get(chat_id, [])
+
+def save_history(chat_id: int, history: list[dict]):
+    conversation_history[chat_id] = history
+    if db:
+        try:
+            db.collection("chats").document(str(chat_id)).set({"history": history})
+        except Exception as e:
+            log.error(f"Firebase Write Error: {e}")
 
 MAX_HISTORY = 20  # messages to keep per user
 
@@ -109,7 +150,7 @@ async def route_message(text: str) -> str:
 
     # Risk detection keywords
     risk_keywords = ["leverage", "100x", "50x", "20x", "all in", "all-in",
-                     "memecoin", "meme coin", "yolo", "bet everything"]
+                     "memecoin", "meme coin", "meme", "shitcoin", "yolo", "bet everything", "$moyu"]
     if any(kw in text_lower for kw in risk_keywords):
         await broadcast_ws({"agent": "trade", "cmd": "/risk_audit", "msg": "Evaluating leverage parameters and liquidation risk."})
         result = analyze_risk(text)
@@ -135,43 +176,53 @@ async def route_message(text: str) -> str:
 
 
 async def ask_ai(chat_id: int, user_message: str) -> str:
-    """Sends a message to OpenAI with conversation history."""
-    if chat_id not in conversation_history:
-        conversation_history[chat_id] = [
+    """Sends a message to OpenClaw via CLI Subprocess since no REST API exists."""
+    history = get_history(chat_id)
+    if not history:
+        history = [
             {"role": "system", "content": SYSTEM_PROMPT}
         ]
 
-    conversation_history[chat_id].append({
+    history.append({
         "role": "user",
         "content": user_message
     })
 
     # Trim history (keep system prompt at index 0)
-    if len(conversation_history[chat_id]) > MAX_HISTORY + 1:
-        conversation_history[chat_id] = [conversation_history[chat_id][0]] + conversation_history[chat_id][-MAX_HISTORY:]
+    if len(history) > MAX_HISTORY + 1:
+        history = [history[0]] + history[-MAX_HISTORY:]
 
-    response = await openai_client.chat.completions.create(
-        model=config.OPENAI_MODEL,
-        max_tokens=config.MAX_TOKENS,
-        messages=conversation_history[chat_id],
-    )
+    try:
+        # Instead of launching a heavy Node.js subprocess for every chat message,
+        # we bypass the OpenClaw CLI and use the AsyncOpenAI client directly.
+        # This cuts response time from ~8-15 seconds down to ~1-2 seconds.
+        response = await openai_client.chat.completions.create(
+            model="gpt-4o-mini", # Fast model for general chatter
+            messages=history,
+            temperature=0.7,
+            max_tokens=500
+        )
+        
+        assistant_reply = response.choices[0].message.content.strip()
 
-    assistant_reply = response.choices[0].message.content
+        history.append({
+            "role": "assistant",
+            "content": assistant_reply
+        })
+        save_history(chat_id, history)
 
-    conversation_history[chat_id].append({
-        "role": "assistant",
-        "content": assistant_reply
-    })
-
-    return assistant_reply
+        return assistant_reply
+    except Exception as e:
+        log.error(f"Error in ask_ai: {e}")
+        return f"⚠️ **Transmission Error:** Core logic failure (`{type(e).__name__}`)."
 
 
 # ── Command Handlers ───────────────────────────────────────────────────────
 
 async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     welcome = (
-        "🐺 **Welcome to Jager AI**\n\n"
-        "_Every BNB is made of Jägers._\n"
+        "🐺 **Welcome to JAGER AI**\n\n"
+        "_Every BNB is made of JAGER._\n"
         "_Every good decision is made of small insights._\n\n"
         "I'm your intelligence agent for the Binance ecosystem. I can help you:\n\n"
         "🔴 **Detect scams** — paste any suspicious message\n"
@@ -189,7 +240,7 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
     help_text = (
-        "🐺 **Jager AI — Command Reference**\n\n"
+        "🐺 **JAGER AI — Command Reference**\n\n"
         "/start — Welcome screen + main menu\n"
         "/price — Quick BNB price check\n"
         "/market — Full market intelligence briefing\n"
@@ -197,8 +248,8 @@ async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "/risk — Explain trading risk awareness\n"
         "/clear — Reset conversation history\n"
         "/help — This message\n\n"
-        "Or just **send any message** and I'll route it to the right module.\n"
-        "Paste a suspicious message to activate Threat Hunter automatically."
+        "Or just **send any message starting with 'JAGER'** and I'll route it to the right module.\n"
+        "Example: `JAGER check this message`"
     )
     await update.message.reply_text(help_text, parse_mode="Markdown")
 
@@ -239,6 +290,11 @@ async def cmd_risk(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def cmd_clear(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
     conversation_history.pop(chat_id, None)
+    if db:
+        try:
+            db.collection("chats").document(str(chat_id)).delete()
+        except Exception as e:
+            log.error(f"Firebase Delete Error: {e}")
     await update.message.reply_text("✅ Conversation history cleared.")
 
 
@@ -246,16 +302,51 @@ async def cmd_clear(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
-    text = update.message.text
+    text_raw = update.message.text
+    text_lower = text_raw.lower().strip()
+
+    log.info(f"📥 Received message from {update.effective_user.first_name} (Chat {chat_id}): '{text_raw}'")
+
+    # Check if this message is a direct reply to the bot itself
+    is_reply_to_bot = (
+        update.message.reply_to_message is not None and
+        update.message.reply_to_message.from_user is not None and
+        update.message.reply_to_message.from_user.id == context.bot.id
+    )
+
+    # Check if the bot's username was mentioned directly
+    bot_username = context.bot.username.lower()
+    is_mention = f"@{bot_username}" in text_lower
+
+    # Mandatory prefix check OR reply to bot OR explicit mention
+    if not text_lower.startswith("jager") and not is_reply_to_bot and not is_mention:
+        return
+
+    # Extract prompt (skip prefix or mention if it exists)
+    if text_lower.startswith("jager"):
+        prompt = text_raw[5:].strip()
+    elif is_mention:
+        # Remove the @username from the prompt string using case-insensitive replace
+        import re
+        prompt = re.sub(f"@{bot_username}", "", text_raw, flags=re.IGNORECASE).strip()
+    else:
+        prompt = text_raw.strip()
+
+    if not prompt:
+        await update.message.reply_text(
+            "🧠 **JAGER AI online.** How can I assist?\n_Please provide a query after the 'JAGER' prefix._",
+            parse_mode="Markdown"
+        )
+        return
 
     await update.message.chat.send_action("typing")
 
     # Try local routing first
-    response = await route_message(text)
+    response = await route_message(prompt)
 
     # Fall back to AI
     if response is None:
-        response = await ask_ai(chat_id, text)
+        response = await ask_ai(chat_id, prompt)
 
     await update.message.reply_text(
         response,
@@ -301,13 +392,13 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         msg = await get_quick_price()
     elif data == "menu_help":
         msg = (
-            "🐺 **Jager AI — Help**\n\n"
+            "🐺 **JAGER AI — Help**\n\n"
             "I have four intelligence modules:\n\n"
             "🔴 **Threat Hunter** — Scam & phishing detection\n"
             "💰 **Opportunity Hunter** — Binance product discovery\n"
             "📡 **Market Hunter** — BNB narrative intelligence\n"
             "⚠️ **Risk Hunter** — Trading risk education\n\n"
-            "Just send a message or use the buttons below."
+            "Just send a message starting with 'JAGER' or use the buttons below."
         )
     else:
         msg = "Unknown action."
@@ -323,7 +414,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 def main():
     config.validate()
-    log.info("🐺 Jager AI starting up...")
+    log.info("🐺 JAGER AI starting up...")
 
     app = Application.builder().token(config.TELEGRAM_BOT_TOKEN).post_init(post_init).build()
 

@@ -17,6 +17,7 @@ SYSTEM_PROMPT_PATH = PROMPTS_DIR / "system_prompt.txt"
 # ── API Keys ───────────────────────────────────────────────────────────────
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+OPENAI_BASE_URL = os.getenv("OPENAI_BASE_URL")
 ADMIN_TELEGRAM_ID = os.getenv("ADMIN_TELEGRAM_ID")
 
 # ── Binance ────────────────────────────────────────────────────────────────
@@ -26,7 +27,7 @@ BINANCE_BASE_URL = os.getenv("BINANCE_BASE_URL", "https://api.binance.com")
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
 
 # ── Model ──────────────────────────────────────────────────────────────────
-OPENAI_MODEL = "gpt-4o-mini"
+OPENAI_MODEL = "gemini-2.5-flash"
 MAX_TOKENS = 1024
 
 # ── Validation ─────────────────────────────────────────────────────────────
