@@ -17,7 +17,7 @@ SYSTEM_PROMPT_PATH = PROMPTS_DIR / "system_prompt.txt"
 # ── API Keys ───────────────────────────────────────────────────────────────
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-OPENAI_BASE_URL = os.getenv("OPENAI_BASE_URL")
+OPENAI_BASE_URL = os.getenv("OPENAI_BASE_URL") or None
 ADMIN_TELEGRAM_ID = os.getenv("ADMIN_TELEGRAM_ID")
 
 # ── Binance ────────────────────────────────────────────────────────────────
