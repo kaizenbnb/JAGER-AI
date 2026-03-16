@@ -197,7 +197,7 @@ async def ask_ai(chat_id: int, user_message: str) -> str:
         # we bypass the OpenClaw CLI and use the AsyncOpenAI client directly.
         # This cuts response time from ~8-15 seconds down to ~1-2 seconds.
         response = await openai_client.chat.completions.create(
-            model="gpt-4o-mini", # Fast model for general chatter
+            model=config.OPENAI_MODEL,
             messages=history,
             temperature=0.7,
             max_tokens=500
