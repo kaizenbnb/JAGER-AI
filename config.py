@@ -27,7 +27,7 @@ BINANCE_BASE_URL = os.getenv("BINANCE_BASE_URL", "https://api.binance.com")
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
 
 # ── Model ──────────────────────────────────────────────────────────────────
-OPENAI_MODEL = "gemini-2.5-flash"
+OPENAI_MODEL = "gemini-2.0-flash"
 MAX_TOKENS = 1024
 
 # ── Validation ─────────────────────────────────────────────────────────────
