@@ -1,6 +1,6 @@
 """
 Jager AI — Main Entry Point
-Telegram bot powered by OpenAI API.
+Telegram bot powered by Anthropic Claude API.
 Orchestrates the four intelligence modules as tools.
 
 Run: python main.py
@@ -10,11 +10,11 @@ import asyncio
 import json
 import logging
 import os
-import subprocess
+import re
 from pathlib import Path
 
 import websockets
-from openai import AsyncOpenAI
+import anthropic
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
     Application,
@@ -32,7 +32,7 @@ from tools.opportunity_hunter import get_opportunities
 from tools.risk_hunter import analyze_risk, format_risk_response
 from tools.market_hunter import get_market_intelligence, get_quick_price
 
-# ── Logging ────────────────────────────────────────────────────────────────
+# ── Logging ────────────────────────────────────────────────────────────────────────────
 logging.basicConfig(
     level=config.LOG_LEVEL,
     format="%(message)s",
@@ -40,17 +40,15 @@ logging.basicConfig(
 )
 log = logging.getLogger("jager-ai")
 
-# ── Load System Prompt ─────────────────────────────────────────────────────
+# ── Load System Prompt ──────────────────────────────────────────────────────────────
 SYSTEM_PROMPT = Path(config.SYSTEM_PROMPT_PATH).read_text(encoding="utf-8")
 
-# ── OpenAI Client ──────────────────────────────────────────────────────────
-openai_client = AsyncOpenAI(
-    api_key=config.OPENAI_API_KEY,
-    base_url=getattr(config, "OPENAI_BASE_URL", None)
-)
+# ── Anthropic Client ──────────────────────────────────────────────────────────────
+anthropic_client = anthropic.AsyncAnthropic(api_key=config.ANTHROPIC_API_KEY)
 
-# ── WebSocket Broadcaster ──────────────────────────────────────────────────
+# ── WebSocket Broadcaster ──────────────────────────────────────────────────────────
 connected_clients = set()
+
 
 async def ws_handler(websocket, path=""):
     connected_clients.add(websocket)
@@ -60,24 +58,28 @@ async def ws_handler(websocket, path=""):
     finally:
         connected_clients.remove(websocket)
 
+
 async def broadcast_ws(data: dict):
     if connected_clients:
         message = json.dumps(data)
-        # We use asyncio.gather to ignore connection errors inside the background loop
-        await asyncio.gather(*[client.send(message) for client in connected_clients], return_exceptions=True)
+        await asyncio.gather(
+            *[client.send(message) for client in connected_clients],
+            return_exceptions=True,
+        )
+
 
 async def post_init(application: Application):
     log.info("Starting WebSocket server on ws://localhost:8765...")
     await websockets.serve(ws_handler, "localhost", 8765)
 
 
-# ── Conversation History (in-memory, per chat_id) ──────────────────────────
+# ── Conversation History (in-memory, per chat_id) ─────────────────────────────────
 import firebase_admin
 from firebase_admin import credentials, firestore
 
 try:
-    cred_path = os.path.join(os.path.dirname(__file__), "jager-ai-firebase-adminsdk-fbsvc-a3c00d5f1a.json")
-    if os.path.exists(cred_path):
+    cred_path = config.FIREBASE_CREDENTIALS_PATH
+    if cred_path and os.path.exists(cred_path):
         cred = credentials.Certificate(cred_path)
         if not firebase_admin._apps:
             firebase_admin.initialize_app(cred)
@@ -92,6 +94,7 @@ except Exception as e:
 
 conversation_history: dict[int, list[dict]] = {}
 
+
 def get_history(chat_id: int) -> list[dict]:
     if db:
         try:
@@ -102,6 +105,7 @@ def get_history(chat_id: int) -> list[dict]:
             log.error(f"Firebase Read Error: {e}")
     return conversation_history.get(chat_id, [])
 
+
 def save_history(chat_id: int, history: list[dict]):
     conversation_history[chat_id] = history
     if db:
@@ -110,28 +114,29 @@ def save_history(chat_id: int, history: list[dict]):
         except Exception as e:
             log.error(f"Firebase Write Error: {e}")
 
+
 MAX_HISTORY = 20  # messages to keep per user
 
 
-# ── Helper: Main Menu Keyboard ─────────────────────────────────────────────
+# ── Helper: Main Menu Keyboard ──────────────────────────────────────────────────────────
 def main_menu_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
         [
-            InlineKeyboardButton("🔴 Threat Hunter", callback_data="menu_threat"),
-            InlineKeyboardButton("💰 Opportunities", callback_data="menu_opportunity"),
+            InlineKeyboardButton("U0001f534 Threat Hunter", callback_data="menu_threat"),
+            InlineKeyboardButton("U0001f4b0 Opportunities", callback_data="menu_opportunity"),
         ],
         [
-            InlineKeyboardButton("📡 Market Intel", callback_data="menu_market"),
+            InlineKeyboardButton("U0001f4e1 Market Intel", callback_data="menu_market"),
             InlineKeyboardButton("⚠️ Risk Check", callback_data="menu_risk"),
         ],
         [
-            InlineKeyboardButton("💰 BNB Price", callback_data="menu_price"),
+            InlineKeyboardButton("U0001f4b0 BNB Price", callback_data="menu_price"),
             InlineKeyboardButton("❓ Help", callback_data="menu_help"),
         ],
     ])
 
 
-# ── Helper: Detect intent and route to tool ────────────────────────────────
+# ── Helper: Detect intent and route to tool ──────────────────────────────────────────────
 async def route_message(text: str) -> str:
     """
     Routes a message to the appropriate tool based on content,
@@ -140,32 +145,41 @@ async def route_message(text: str) -> str:
     text_lower = text.lower()
 
     # Threat detection keywords
-    threat_keywords = ["seed", "phrase", "private key", "support", "suspended",
-                       "verify", "urgent", "scam", "phishing", "check this message",
-                       "is this legit", "is this real"]
+    threat_keywords = [
+        "seed", "phrase", "private key", "support", "suspended",
+        "verify", "urgent", "scam", "phishing", "check this message",
+        "is this legit", "is this real",
+    ]
     if any(kw in text_lower for kw in threat_keywords):
         await broadcast_ws({"agent": "ops", "cmd": "/threat_scan", "msg": "Analyzing suspicious message for scam patterns..."})
         result = analyze_message(text)
         return format_threat_response(result)
 
     # Risk detection keywords
-    risk_keywords = ["leverage", "100x", "50x", "20x", "all in", "all-in",
-                     "memecoin", "meme coin", "meme", "shitcoin", "yolo", "bet everything", "$moyu"]
+    risk_keywords = [
+        "leverage", "100x", "50x", "20x", "all in", "all-in",
+        "memecoin", "meme coin", "meme", "shitcoin", "yolo",
+        "bet everything", "$moyu",
+    ]
     if any(kw in text_lower for kw in risk_keywords):
         await broadcast_ws({"agent": "trade", "cmd": "/risk_audit", "msg": "Evaluating leverage parameters and liquidation risk."})
         result = analyze_risk(text)
         return format_risk_response(result)
 
     # Market intelligence keywords
-    market_keywords = ["market", "price", "bnb price", "trend", "narrative",
-                       "gainers", "briefing", "intel", "analysis"]
+    market_keywords = [
+        "market", "price", "bnb price", "trend", "narrative",
+        "gainers", "briefing", "intel", "analysis",
+    ]
     if any(kw in text_lower for kw in market_keywords):
         await broadcast_ws({"agent": "intl", "cmd": "/market_intel", "msg": "Gathering macro narrative and price data."})
         return await get_market_intelligence()
 
     # Opportunity keywords
-    opportunity_keywords = ["earn", "staking", "launchpool", "yield", "passive",
-                             "what can i do", "opportunities", "products", "farming"]
+    opportunity_keywords = [
+        "earn", "staking", "launchpool", "yield", "passive",
+        "what can i do", "opportunities", "products", "farming",
+    ]
     if any(kw in text_lower for kw in opportunity_keywords):
         await broadcast_ws({"agent": "data", "cmd": "/fetch_yields", "msg": "Querying Binance ecosystem for yield products."})
         return await get_opportunities(user_goal=text)
@@ -176,79 +190,85 @@ async def route_message(text: str) -> str:
 
 
 async def ask_ai(chat_id: int, user_message: str) -> str:
-    """Sends a message to OpenClaw via CLI Subprocess since no REST API exists."""
+    """Sends a message to Claude (Anthropic) with conversation memory."""
     history = get_history(chat_id)
-    if not history:
-        history = [
-            {"role": "system", "content": SYSTEM_PROMPT}
-        ]
 
-    history.append({
-        "role": "user",
-        "content": user_message
-    })
+    history.append({"role": "user", "content": user_message})
 
-    # Trim history (keep system prompt at index 0)
-    if len(history) > MAX_HISTORY + 1:
-        history = [history[0]] + history[-MAX_HISTORY:]
+    # Trim history to prevent unbounded growth
+    if len(history) > MAX_HISTORY:
+        history = history[-MAX_HISTORY:]
 
     try:
-        # Instead of launching a heavy Node.js subprocess for every chat message,
-        # we bypass the OpenClaw CLI and use the AsyncOpenAI client directly.
-        # This cuts response time from ~8-15 seconds down to ~1-2 seconds.
-        response = await openai_client.chat.completions.create(
-            model=config.OPENAI_MODEL,
+        response = await anthropic_client.messages.create(
+            model=config.ANTHROPIC_MODEL,
+            max_tokens=config.MAX_TOKENS,
+            system=SYSTEM_PROMPT,
             messages=history,
-            temperature=0.7,
-            max_tokens=500
         )
-        
-        assistant_reply = response.choices[0].message.content.strip()
-
-        history.append({
-            "role": "assistant",
-            "content": assistant_reply
-        })
+        assistant_reply = response.content[0].text.strip()
+        history.append({"role": "assistant", "content": assistant_reply})
         save_history(chat_id, history)
-
         return assistant_reply
     except Exception as e:
         log.error(f"Error in ask_ai: {e}")
         return f"⚠️ **Transmission Error:** Core logic failure (`{type(e).__name__}`)."
 
 
-# ── Command Handlers ───────────────────────────────────────────────────────
-
+# ── Command Handlers ─────────────────────────────────────────────────────────────────────────
 async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     welcome = (
-        "🐺 **Welcome to JAGER AI**\n\n"
-        "_Every BNB is made of JAGER._\n"
-        "_Every good decision is made of small insights._\n\n"
-        "I'm your intelligence agent for the Binance ecosystem. I can help you:\n\n"
-        "🔴 **Detect scams** — paste any suspicious message\n"
-        "💰 **Discover opportunities** — Launchpool, Earn, staking\n"
-        "📡 **Read the market** — narrative-level BNB intelligence\n"
-        "⚠️ **Assess trading risk** — before you make a move\n\n"
+        "U0001f43a **Welcome to JAGER AI**
+
+"
+        "_Every BNB is made of JAGER._
+"
+        "_Every good decision is made of small insights._
+
+"
+        "I'm your intelligence agent for the Binance ecosystem. I can help you:
+
+"
+        "U0001f534 **Detect scams** — paste any suspicious message
+"
+        "U0001f4b0 **Discover opportunities** — Launchpool, Earn, staking
+"
+        "U0001f4e1 **Read the market** — narrative-level BNB intelligence
+"
+        "⚠️ **Assess trading risk** — before you make a move
+
+"
         "What would you like to explore?"
     )
     await update.message.reply_text(
         welcome,
         parse_mode="Markdown",
-        reply_markup=main_menu_keyboard()
+        reply_markup=main_menu_keyboard(),
     )
 
 
 async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
     help_text = (
-        "🐺 **JAGER AI — Command Reference**\n\n"
-        "/start — Welcome screen + main menu\n"
-        "/price — Quick BNB price check\n"
-        "/market — Full market intelligence briefing\n"
-        "/opportunities — Discover Binance ecosystem products\n"
-        "/risk — Explain trading risk awareness\n"
-        "/clear — Reset conversation history\n"
-        "/help — This message\n\n"
-        "Or just **send any message starting with 'JAGER'** and I'll route it to the right module.\n"
+        "U0001f43a **JAGER AI — Command Reference**
+
+"
+        "/start — Welcome screen + main menu
+"
+        "/price — Quick BNB price check
+"
+        "/market — Full market intelligence briefing
+"
+        "/opportunities — Discover Binance ecosystem products
+"
+        "/risk — Explain trading risk awareness
+"
+        "/clear — Reset conversation history
+"
+        "/help — This message
+
+"
+        "Or just **send any message starting with 'JAGER'** and I'll route it to the right module.
+"
         "Example: `JAGER check this message`"
     )
     await update.message.reply_text(help_text, parse_mode="Markdown")
@@ -277,11 +297,18 @@ async def cmd_opportunities(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def cmd_risk(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = (
-        "⚠️ **Risk Hunter**\n\n"
-        "Send me a message describing your intended trade and I'll flag any risk patterns.\n\n"
-        "Examples:\n"
-        "• _'I want to trade 100x leverage on a memecoin'_\n"
-        "• _'Should I go all-in on this 10x call?'_\n"
+        "⚠️ **Risk Hunter**
+
+"
+        "Send me a message describing your intended trade and I'll flag any risk patterns.
+
+"
+        "Examples:
+"
+        "• _'I want to trade 100x leverage on a memecoin'_
+"
+        "• _'Should I go all-in on this 10x call?'_
+"
         "• _'Is 50x leverage on BNB safe?'_"
     )
     await update.message.reply_text(msg, parse_mode="Markdown")
@@ -298,20 +325,19 @@ async def cmd_clear(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("✅ Conversation history cleared.")
 
 
-# ── Message Handler ────────────────────────────────────────────────────────
-
+# ── Message Handler ────────────────────────────────────────────────────────────────────────
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
     text_raw = update.message.text
     text_lower = text_raw.lower().strip()
 
-    log.info(f"📥 Received message from {update.effective_user.first_name} (Chat {chat_id}): '{text_raw}'")
+    log.info(f"U0001f4e5 Received message from {update.effective_user.first_name} (Chat {chat_id}): '{text_raw}'")
 
     # Check if this message is a direct reply to the bot itself
     is_reply_to_bot = (
-        update.message.reply_to_message is not None and
-        update.message.reply_to_message.from_user is not None and
-        update.message.reply_to_message.from_user.id == context.bot.id
+        update.message.reply_to_message is not None
+        and update.message.reply_to_message.from_user is not None
+        and update.message.reply_to_message.from_user.id == context.bot.id
     )
 
     # Check if the bot's username was mentioned directly
@@ -326,16 +352,15 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if text_lower.startswith("jager"):
         prompt = text_raw[5:].strip()
     elif is_mention:
-        # Remove the @username from the prompt string using case-insensitive replace
-        import re
         prompt = re.sub(f"@{bot_username}", "", text_raw, flags=re.IGNORECASE).strip()
     else:
         prompt = text_raw.strip()
 
     if not prompt:
         await update.message.reply_text(
-            "🧠 **JAGER AI online.** How can I assist?\n_Please provide a query after the 'JAGER' prefix._",
-            parse_mode="Markdown"
+            "U0001f9e0 **JAGER AI online.** How can I assist?
+_Please provide a query after the 'JAGER' prefix._",
+            parse_mode="Markdown",
         )
         return
 
@@ -344,30 +369,32 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Try local routing first
     response = await route_message(prompt)
 
-    # Fall back to AI
+    # Fall back to AI if no tool matched
     if response is None:
         response = await ask_ai(chat_id, prompt)
 
     await update.message.reply_text(
         response,
         parse_mode="Markdown",
-        reply_markup=main_menu_keyboard()
+        reply_markup=main_menu_keyboard(),
     )
 
 
-# ── Callback Query Handler (Inline Buttons) ────────────────────────────────
-
+# ── Callback Query Handler (Inline Buttons) ─────────────────────────────────────────────────
 async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
-
     data = query.data
 
     if data == "menu_threat":
         await broadcast_ws({"agent": "ops", "cmd": "/threat_scan", "msg": "Analyzing suspicious message for scam patterns..."})
         msg = (
-            "🔴 **Threat Hunter**\n\n"
-            "Paste any suspicious message below and I'll analyze it for scam patterns.\n\n"
+            "U0001f534 **Threat Hunter**
+
+"
+            "Paste any suspicious message below and I'll analyze it for scam patterns.
+
+"
             "I look for: seed phrase requests, fake support, impersonation, urgency tactics, "
             "and financial bait."
         )
@@ -382,8 +409,12 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data == "menu_risk":
         await broadcast_ws({"agent": "trade", "cmd": "/risk_audit", "msg": "Evaluating leverage parameters and liquidation risk."})
         msg = (
-            "⚠️ **Risk Hunter**\n\n"
-            "Describe your intended trade and I'll flag any risk patterns.\n\n"
+            "⚠️ **Risk Hunter**
+
+"
+            "Describe your intended trade and I'll flag any risk patterns.
+
+"
             "Try: _'I want to use 100x leverage on a memecoin'_"
         )
     elif data == "menu_price":
@@ -392,12 +423,21 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         msg = await get_quick_price()
     elif data == "menu_help":
         msg = (
-            "🐺 **JAGER AI — Help**\n\n"
-            "I have four intelligence modules:\n\n"
-            "🔴 **Threat Hunter** — Scam & phishing detection\n"
-            "💰 **Opportunity Hunter** — Binance product discovery\n"
-            "📡 **Market Hunter** — BNB narrative intelligence\n"
-            "⚠️ **Risk Hunter** — Trading risk education\n\n"
+            "U0001f43a **JAGER AI — Help**
+
+"
+            "I have four intelligence modules:
+
+"
+            "U0001f534 **Threat Hunter** — Scam & phishing detection
+"
+            "U0001f4b0 **Opportunity Hunter** — Binance product discovery
+"
+            "U0001f4e1 **Market Hunter** — BNB narrative intelligence
+"
+            "⚠️ **Risk Hunter** — Trading risk education
+
+"
             "Just send a message starting with 'JAGER' or use the buttons below."
         )
     else:
@@ -406,15 +446,14 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.message.reply_text(
         msg,
         parse_mode="Markdown",
-        reply_markup=main_menu_keyboard()
+        reply_markup=main_menu_keyboard(),
     )
 
 
-# ── App Entry Point ────────────────────────────────────────────────────────
-
+# ── App Entry Point ────────────────────────────────────────────────────────────────────────────────
 def main():
     config.validate()
-    log.info("🐺 JAGER AI starting up...")
+    log.info("U0001f43a JAGER AI starting up...")
 
     app = Application.builder().token(config.TELEGRAM_BOT_TOKEN).post_init(post_init).build()
 
