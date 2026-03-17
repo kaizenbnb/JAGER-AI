@@ -9,34 +9,36 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# ── Paths ──────────────────────────────────────────────────────────────────
+# ── Paths ─────────────────────────────────────────────────────────────────
 BASE_DIR = Path(__file__).parent
 PROMPTS_DIR = BASE_DIR / "prompts"
 SYSTEM_PROMPT_PATH = PROMPTS_DIR / "system_prompt.txt"
 
-# ── API Keys ───────────────────────────────────────────────────────────────
+# ── API Keys ──────────────────────────────────────────────────────────────
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-OPENAI_BASE_URL = os.getenv("OPENAI_BASE_URL") or None
+ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
 ADMIN_TELEGRAM_ID = os.getenv("ADMIN_TELEGRAM_ID")
 
-# ── Binance ────────────────────────────────────────────────────────────────
+# ── Firebase (optional — falls back to in-memory if not set) ──────────────
+FIREBASE_CREDENTIALS_PATH = os.getenv("FIREBASE_CREDENTIALS_PATH")
+
+# ── Binance ───────────────────────────────────────────────────────────────
 BINANCE_BASE_URL = os.getenv("BINANCE_BASE_URL", "https://api.binance.com")
 
-# ── Logging ────────────────────────────────────────────────────────────────
+# ── Logging ───────────────────────────────────────────────────────────────
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
 
-# ── Model ──────────────────────────────────────────────────────────────────
-OPENAI_MODEL = "gemini-2.0-flash"
+# ── Model ─────────────────────────────────────────────────────────────────
+ANTHROPIC_MODEL = os.getenv("ANTHROPIC_MODEL", "claude-3-5-haiku-20241022")
 MAX_TOKENS = 1024
 
-# ── Validation ─────────────────────────────────────────────────────────────
+# ── Validation ────────────────────────────────────────────────────────────
 def validate():
     missing = []
     if not TELEGRAM_BOT_TOKEN:
         missing.append("TELEGRAM_BOT_TOKEN")
-    if not OPENAI_API_KEY:
-        missing.append("OPENAI_API_KEY")
+    if not ANTHROPIC_API_KEY:
+        missing.append("ANTHROPIC_API_KEY")
     if missing:
         raise EnvironmentError(
             f"Missing required environment variables: {', '.join(missing)}\n"
