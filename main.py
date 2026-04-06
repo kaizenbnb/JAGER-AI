@@ -1,19 +1,17 @@
 """
 Jager AI — Main Entry Point
-Telegram bot powered by Anthropic Claude API.
+Telegram bot powered by Claude (via Anthropic API).
 Orchestrates the four intelligence modules as tools.
 
 Run: python main.py
 """
 
 import asyncio
-import json
 import logging
-import os
-import re
+import time
+from collections import defaultdict, deque
 from pathlib import Path
 
-import websockets
 import anthropic
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
@@ -32,7 +30,7 @@ from tools.opportunity_hunter import get_opportunities
 from tools.risk_hunter import analyze_risk, format_risk_response
 from tools.market_hunter import get_market_intelligence, get_quick_price
 
-# ── Logging ────────────────────────────────────────────────────────────────────────────────────
+# ── Logging ───────────────────────────────────────────────────────────────────
 logging.basicConfig(
     level=config.LOG_LEVEL,
     format="%(message)s",
@@ -40,85 +38,74 @@ logging.basicConfig(
 )
 log = logging.getLogger("jager-ai")
 
-# ── Load System Prompt ───────────────────────────────────────────────────────────────────────────
+# ── Load System Prompt ────────────────────────────────────────────────────────
 SYSTEM_PROMPT = Path(config.SYSTEM_PROMPT_PATH).read_text(encoding="utf-8")
 
-# ── Anthropic Client ───────────────────────────────────────────────────────────────────────────
-anthropic_client = anthropic.AsyncAnthropic(api_key=config.ANTHROPIC_API_KEY)
+# ── Anthropic Client ──────────────────────────────────────────────────────────
+anthropic_client = anthropic.Anthropic(api_key=config.ANTHROPIC_API_KEY)
 
-# ── WebSocket Broadcaster ────────────────────────────────────────────────────────────────────
-connected_clients = set()
-
-
-async def ws_handler(websocket, path=""):
-    connected_clients.add(websocket)
-    try:
-        async for message in websocket:
-            pass  # We don't expect messages from the frontend yet
-    finally:
-        connected_clients.remove(websocket)
-
-
-async def broadcast_ws(data: dict):
-    if connected_clients:
-        message = json.dumps(data)
-        await asyncio.gather(
-            *[client.send(message) for client in connected_clients],
-            return_exceptions=True,
-        )
-
-
-async def post_init(application: Application):
-    log.info("Starting WebSocket server on ws://localhost:8765...")
-    await websockets.serve(ws_handler, "localhost", 8765)
-
-
-# ── Conversation History (in-memory, per chat_id) ───────────────────────────────────────────────
-import firebase_admin
-from firebase_admin import credentials, firestore
-
-try:
-    cred_path = config.FIREBASE_CREDENTIALS_PATH
-    if cred_path and os.path.exists(cred_path):
-        cred = credentials.Certificate(cred_path)
-        if not firebase_admin._apps:
-            firebase_admin.initialize_app(cred)
-        db = firestore.client()
-        log.info("Firebase connected for persistent memory.")
-    else:
-        db = None
-        log.warning("Firebase credentials not found, using memory fallback.")
-except Exception as e:
-    db = None
-    log.error(f"Failed to initialize Firebase: {e}")
-
+# ── Conversation History (in-memory, per chat_id) ────────────────────────────
 conversation_history: dict[int, list[dict]] = {}
-
-
-def get_history(chat_id: int) -> list[dict]:
-    if db:
-        try:
-            doc = db.collection("chats").document(str(chat_id)).get()
-            if doc.exists:
-                return doc.to_dict().get("history", [])
-        except Exception as e:
-            log.error(f"Firebase Read Error: {e}")
-    return conversation_history.get(chat_id, [])
-
-
-def save_history(chat_id: int, history: list[dict]):
-    conversation_history[chat_id] = history
-    if db:
-        try:
-            db.collection("chats").document(str(chat_id)).set({"history": history})
-        except Exception as e:
-            log.error(f"Firebase Write Error: {e}")
-
-
 MAX_HISTORY = 20  # messages to keep per user
 
+# ── Rate Limiting ─────────────────────────────────────────────────────────────
+# Max messages per user within the time window
+RATE_LIMIT_MAX = 10          # max 10 messages...
+RATE_LIMIT_WINDOW = 60       # ...per 60 seconds
 
-# ── Helper: Main Menu Keyboard ────────────────────────────────────────────────────────────────────────
+# Tracks timestamps of recent messages per user_id
+_rate_store: dict[int, deque] = defaultdict(deque)
+
+
+def is_rate_limited(user_id: int) -> tuple[bool, int]:
+    """
+    Sliding window rate limiter.
+    Returns (is_limited, seconds_until_reset).
+    """
+    now = time.monotonic()
+    window = _rate_store[user_id]
+
+    # Drop timestamps outside the window
+    while window and now - window[0] > RATE_LIMIT_WINDOW:
+        window.popleft()
+
+    if len(window) >= RATE_LIMIT_MAX:
+        wait = int(RATE_LIMIT_WINDOW - (now - window[0])) + 1
+        return True, wait
+
+    window.append(now)
+    return False, 0
+
+
+def sanitize_input(text: str) -> str:
+    """
+    Basic prompt injection defense.
+    Strips attempts to override system instructions via user input.
+    """
+    MAX_LENGTH = 2000
+    text = text[:MAX_LENGTH]  # hard cap — no novels
+
+    # Flag but don't block — Claude's system prompt takes precedence anyway.
+    # Log suspicious patterns for monitoring.
+    injection_signals = [
+        "ignore previous instructions",
+        "ignore all instructions",
+        "you are now",
+        "disregard your",
+        "new system prompt",
+        "forget everything",
+        "act as",
+    ]
+    lower = text.lower()
+    for signal in injection_signals:
+        if signal in lower:
+            log.warning(f"Possible prompt injection attempt from input: {text[:100]}")
+            break
+
+    return text
+
+
+# ── Helper: Main Menu Keyboard ────────────────────────────────────────────────
 def main_menu_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
         [
@@ -136,7 +123,7 @@ def main_menu_keyboard() -> InlineKeyboardMarkup:
     ])
 
 
-# ── Helper: Detect intent and route to tool ────────────────────────────────────────────────────
+# ── Helper: Detect intent and route to tool ───────────────────────────────────
 async def route_message(text: str) -> str:
     """
     Routes a message to the appropriate tool based on content,
@@ -144,164 +131,130 @@ async def route_message(text: str) -> str:
     """
     text_lower = text.lower()
 
-    threat_keywords = [
-        "seed", "phrase", "private key", "support", "suspended",
-        "verify", "urgent", "scam", "phishing", "check this message",
-        "is this legit", "is this real",
-    ]
+    # Threat detection keywords
+    threat_keywords = ["seed", "phrase", "private key", "support", "suspended",
+                       "verify", "urgent", "scam", "phishing", "check this message",
+                       "is this legit", "is this real"]
     if any(kw in text_lower for kw in threat_keywords):
-        await broadcast_ws({"agent": "ops", "cmd": "/threat_scan", "msg": "Analyzing suspicious message for scam patterns..."})
         result = analyze_message(text)
         return format_threat_response(result)
 
-    risk_keywords = [
-        "leverage", "100x", "50x", "20x", "all in", "all-in",
-        "memecoin", "meme coin", "meme", "shitcoin", "yolo",
-        "bet everything", "$moyu",
-    ]
+    # Risk detection keywords
+    risk_keywords = ["leverage", "100x", "50x", "20x", "all in", "all-in",
+                     "memecoin", "meme coin", "yolo", "bet everything"]
     if any(kw in text_lower for kw in risk_keywords):
-        await broadcast_ws({"agent": "trade", "cmd": "/risk_audit", "msg": "Evaluating leverage parameters and liquidation risk."})
         result = analyze_risk(text)
         return format_risk_response(result)
 
-    market_keywords = [
-        "market", "price", "bnb price", "trend", "narrative",
-        "gainers", "briefing", "intel", "analysis",
-    ]
+    # Market intelligence keywords
+    market_keywords = ["market", "price", "bnb price", "trend", "narrative",
+                       "gainers", "briefing", "intel", "analysis"]
     if any(kw in text_lower for kw in market_keywords):
-        await broadcast_ws({"agent": "intl", "cmd": "/market_intel", "msg": "Gathering macro narrative and price data."})
         return await get_market_intelligence()
 
-    opportunity_keywords = [
-        "earn", "staking", "launchpool", "yield", "passive",
-        "what can i do", "opportunities", "products", "farming",
-    ]
+    # Opportunity keywords
+    opportunity_keywords = ["earn", "staking", "launchpool", "yield", "passive",
+                             "what can i do", "opportunities", "products", "farming"]
     if any(kw in text_lower for kw in opportunity_keywords):
-        await broadcast_ws({"agent": "data", "cmd": "/fetch_yields", "msg": "Querying Binance ecosystem for yield products."})
         return await get_opportunities(user_goal=text)
 
-    await broadcast_ws({"agent": "intl", "cmd": "/core_inference", "msg": "Routing unstructured query to Jager AI core..."})
+    # Fall back to Claude for general questions
     return None  # Signal to use Claude
 
 
-async def ask_ai(chat_id: int, user_message: str) -> str:
-    """Sends a message to Claude (Anthropic) with conversation memory."""
-    history = get_history(chat_id)
-    history.append({"role": "user", "content": user_message})
+async def ask_claude(chat_id: int, user_message: str) -> str:
+    """Sends a message to Claude with conversation history."""
+    if chat_id not in conversation_history:
+        conversation_history[chat_id] = []
 
-    if len(history) > MAX_HISTORY:
-        history = history[-MAX_HISTORY:]
+    conversation_history[chat_id].append({
+        "role": "user",
+        "content": user_message
+    })
 
-    try:
-        response = await anthropic_client.messages.create(
-            model=config.ANTHROPIC_MODEL,
-            max_tokens=config.MAX_TOKENS,
-            system=SYSTEM_PROMPT,
-            messages=history,
-        )
-        assistant_reply = response.content[0].text.strip()
-        history.append({"role": "assistant", "content": assistant_reply})
-        save_history(chat_id, history)
-        return assistant_reply
-    except Exception as e:
-        log.error(f"Error in ask_ai: {e}")
-        return f"⚠️ **Transmission Error:** Core logic failure (`{type(e).__name__}`)."
+    # Trim history
+    if len(conversation_history[chat_id]) > MAX_HISTORY:
+        conversation_history[chat_id] = conversation_history[chat_id][-MAX_HISTORY:]
+
+    response = anthropic_client.messages.create(
+        model=config.CLAUDE_MODEL,
+        max_tokens=config.MAX_TOKENS,
+        system=SYSTEM_PROMPT,
+        messages=conversation_history[chat_id],
+    )
+
+    assistant_reply = response.content[0].text
+
+    conversation_history[chat_id].append({
+        "role": "assistant",
+        "content": assistant_reply
+    })
+
+    return assistant_reply
 
 
-# ── Command Handlers ──────────────────────────────────────────────────────────────────────────────────
+# ── Command Handlers ──────────────────────────────────────────────────────────
+
 async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     welcome = (
-        "🐺 **Welcome to JAGER AI**
-
-"
-        "_Every BNB is made of JAGER._
-"
-        "_Every good decision is made of small insights._
-
-"
-        "I'm your intelligence agent for the Binance ecosystem. I can help you:
-
-"
-        "🔴 **Detect scams** — paste any suspicious message
-"
-        "💰 **Discover opportunities** — Launchpool, Earn, staking
-"
-        "📡 **Read the market** — narrative-level BNB intelligence
-"
-        "⚠️ **Assess trading risk** — before you make a move
-
-"
+        "🐺 **Welcome to Jager AI**\n\n"
+        "_Every BNB is made of Jagers._\n"
+        "_Every good decision is made of small insights._\n\n"
+        "I'm your intelligence agent for the Binance ecosystem. I can help you:\n\n"
+        "🔴 **Detect scams** — paste any suspicious message\n"
+        "💰 **Discover opportunities** — Launchpool, Earn, staking\n"
+        "📡 **Read the market** — narrative-level BNB intelligence\n"
+        "⚠️ **Assess trading risk** — before you make a move\n\n"
         "What would you like to explore?"
     )
     await update.message.reply_text(
         welcome,
         parse_mode="Markdown",
-        reply_markup=main_menu_keyboard(),
+        reply_markup=main_menu_keyboard()
     )
 
 
 async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
     help_text = (
-        "🐺 **JAGER AI — Command Reference**
-
-"
-        "/start — Welcome screen + main menu
-"
-        "/price — Quick BNB price check
-"
-        "/market — Full market intelligence briefing
-"
-        "/opportunities — Discover Binance ecosystem products
-"
-        "/risk — Explain trading risk awareness
-"
-        "/clear — Reset conversation history
-"
-        "/help — This message
-
-"
-        "Or just **send any message starting with 'JAGER'** and I'll route it to the right module.
-"
-        "Example: `JAGER check this message`"
+        "🐺 **Jager AI — Command Reference**\n\n"
+        "/start — Welcome screen + main menu\n"
+        "/price — Quick BNB price check\n"
+        "/market — Full market intelligence briefing\n"
+        "/opportunities — Discover Binance ecosystem products\n"
+        "/risk — Explain trading risk awareness\n"
+        "/clear — Reset conversation history\n"
+        "/help — This message\n\n"
+        "Or just **send any message** and I'll route it to the right module.\n"
+        "Paste a suspicious message to activate Threat Hunter automatically."
     )
     await update.message.reply_text(help_text, parse_mode="Markdown")
 
 
 async def cmd_price(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.chat.send_action("typing")
-    await broadcast_ws({"agent": "intl", "cmd": "/market_intel", "msg": "Fetching real-time BNB ticker."})
     msg = await get_quick_price()
     await update.message.reply_text(msg, parse_mode="Markdown")
 
 
 async def cmd_market(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.chat.send_action("typing")
-    await broadcast_ws({"agent": "intl", "cmd": "/market_intel", "msg": "Gathering macro narrative and price data."})
     msg = await get_market_intelligence()
     await update.message.reply_text(msg, parse_mode="Markdown")
 
 
 async def cmd_opportunities(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.chat.send_action("typing")
-    await broadcast_ws({"agent": "data", "cmd": "/fetch_yields", "msg": "Querying Binance ecosystem for yield products."})
     msg = await get_opportunities()
     await update.message.reply_text(msg, parse_mode="Markdown")
 
 
 async def cmd_risk(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = (
-        "⚠️ **Risk Hunter**
-
-"
-        "Send me a message describing your intended trade and I'll flag any risk patterns.
-
-"
-        "Examples:
-"
-        "• _'I want to trade 100x leverage on a memecoin'_
-"
-        "• _'Should I go all-in on this 10x call?'_
-"
+        "⚠️ **Risk Hunter**\n\n"
+        "Send me a message describing your intended trade and I'll flag any risk patterns.\n\n"
+        "Examples:\n"
+        "• _'I want to trade 100x leverage on a memecoin'_\n"
+        "• _'Should I go all-in on this 10x call?'_\n"
         "• _'Is 50x leverage on BNB safe?'_"
     )
     await update.message.reply_text(msg, parse_mode="Markdown")
@@ -310,122 +263,95 @@ async def cmd_risk(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def cmd_clear(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
     conversation_history.pop(chat_id, None)
-    if db:
-        try:
-            db.collection("chats").document(str(chat_id)).delete()
-        except Exception as e:
-            log.error(f"Firebase Delete Error: {e}")
     await update.message.reply_text("✅ Conversation history cleared.")
 
 
-# ── Message Handler ──────────────────────────────────────────────────────────────────────────────────
+# ── Message Handler ───────────────────────────────────────────────────────────
+
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
-    text_raw = update.message.text
-    text_lower = text_raw.lower().strip()
+    user_id = update.effective_user.id
+    text = update.message.text
 
-    log.info(f"📥 Received message from {update.effective_user.first_name} (Chat {chat_id}): '{text_raw}'")
-
-    is_reply_to_bot = (
-        update.message.reply_to_message is not None
-        and update.message.reply_to_message.from_user is not None
-        and update.message.reply_to_message.from_user.id == context.bot.id
-    )
-
-    bot_username = context.bot.username.lower()
-    is_mention = f"@{bot_username}" in text_lower
-
-    if not text_lower.startswith("jager") and not is_reply_to_bot and not is_mention:
-        return
-
-    if text_lower.startswith("jager"):
-        prompt = text_raw[5:].strip()
-    elif is_mention:
-        prompt = re.sub(f"@{bot_username}", "", text_raw, flags=re.IGNORECASE).strip()
-    else:
-        prompt = text_raw.strip()
-
-    if not prompt:
+    # ── Rate limit check ──────────────────────────────────────────────────────
+    limited, wait_secs = is_rate_limited(user_id)
+    if limited:
+        log.warning(f"Rate limit hit — user_id={user_id}")
         await update.message.reply_text(
-            "🧠 **JAGER AI online.** How can I assist?
-_Please provide a query after the 'JAGER' prefix._",
-            parse_mode="Markdown",
+            f"⏳ Slow down. You've sent too many messages.\n"
+            f"Try again in {wait_secs} seconds."
         )
         return
 
+    # ── Sanitize input ────────────────────────────────────────────────────────
+    text = sanitize_input(text)
+
     await update.message.chat.send_action("typing")
 
-    response = await route_message(prompt)
+    # Try local routing first
+    response = await route_message(text)
 
+    # Fall back to Claude
     if response is None:
-        response = await ask_ai(chat_id, prompt)
+        response = await ask_claude(chat_id, text)
 
     await update.message.reply_text(
         response,
         parse_mode="Markdown",
-        reply_markup=main_menu_keyboard(),
+        reply_markup=main_menu_keyboard()
     )
 
 
-# ── Callback Query Handler (Inline Buttons) ─────────────────────────────────────────────────────────
+# ── Callback Query Handler (Inline Buttons) ───────────────────────────────────
+
 async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
+    user_id = update.effective_user.id
+
+    # ── Rate limit check ──────────────────────────────────────────────────────
+    limited, wait_secs = is_rate_limited(user_id)
+    if limited:
+        log.warning(f"Rate limit hit on callback — user_id={user_id}")
+        await query.answer(
+            f"Too many requests. Wait {wait_secs}s.",
+            show_alert=True
+        )
+        return
+
     await query.answer()
     data = query.data
 
     if data == "menu_threat":
-        await broadcast_ws({"agent": "ops", "cmd": "/threat_scan", "msg": "Analyzing suspicious message for scam patterns..."})
         msg = (
-            "🔴 **Threat Hunter**
-
-"
-            "Paste any suspicious message below and I'll analyze it for scam patterns.
-
-"
+            "🔴 **Threat Hunter**\n\n"
+            "Paste any suspicious message below and I'll analyze it for scam patterns.\n\n"
             "I look for: seed phrase requests, fake support, impersonation, urgency tactics, "
             "and financial bait."
         )
     elif data == "menu_opportunity":
         await query.message.chat.send_action("typing")
-        await broadcast_ws({"agent": "data", "cmd": "/fetch_yields", "msg": "Querying Binance ecosystem for yield products."})
         msg = await get_opportunities()
     elif data == "menu_market":
         await query.message.chat.send_action("typing")
-        await broadcast_ws({"agent": "intl", "cmd": "/market_intel", "msg": "Gathering macro narrative and price data."})
         msg = await get_market_intelligence()
     elif data == "menu_risk":
-        await broadcast_ws({"agent": "trade", "cmd": "/risk_audit", "msg": "Evaluating leverage parameters and liquidation risk."})
         msg = (
-            "⚠️ **Risk Hunter**
-
-"
-            "Describe your intended trade and I'll flag any risk patterns.
-
-"
+            "⚠️ **Risk Hunter**\n\n"
+            "Describe your intended trade and I'll flag any risk patterns.\n\n"
             "Try: _'I want to use 100x leverage on a memecoin'_"
         )
     elif data == "menu_price":
         await query.message.chat.send_action("typing")
-        await broadcast_ws({"agent": "intl", "cmd": "/market_intel", "msg": "Fetching real-time BNB ticker."})
         msg = await get_quick_price()
     elif data == "menu_help":
         msg = (
-            "🐺 **JAGER AI — Help**
-
-"
-            "I have four intelligence modules:
-
-"
-            "🔴 **Threat Hunter** — Scam & phishing detection
-"
-            "💰 **Opportunity Hunter** — Binance product discovery
-"
-            "📡 **Market Hunter** — BNB narrative intelligence
-"
-            "⚠️ **Risk Hunter** — Trading risk education
-
-"
-            "Just send a message starting with 'JAGER' or use the buttons below."
+            "🐺 **Jager AI — Help**\n\n"
+            "I have four intelligence modules:\n\n"
+            "🔴 **Threat Hunter** — Scam & phishing detection\n"
+            "💰 **Opportunity Hunter** — Binance product discovery\n"
+            "📡 **Market Hunter** — BNB narrative intelligence\n"
+            "⚠️ **Risk Hunter** — Trading risk education\n\n"
+            "Just send a message or use the buttons below."
         )
     else:
         msg = "Unknown action."
@@ -433,16 +359,17 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.message.reply_text(
         msg,
         parse_mode="Markdown",
-        reply_markup=main_menu_keyboard(),
+        reply_markup=main_menu_keyboard()
     )
 
 
-# ── App Entry Point ────────────────────────────────────────────────────────────────────────────────────
+# ── App Entry Point ───────────────────────────────────────────────────────────
+
 def main():
     config.validate()
-    log.info("🐺 JAGER AI starting up...")
+    log.info("🐺 Jager AI starting up...")
 
-    app = Application.builder().token(config.TELEGRAM_BOT_TOKEN).post_init(post_init).build()
+    app = Application.builder().token(config.TELEGRAM_BOT_TOKEN).build()
 
     app.add_handler(CommandHandler("start", cmd_start))
     app.add_handler(CommandHandler("help", cmd_help))
